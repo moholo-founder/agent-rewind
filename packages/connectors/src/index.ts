@@ -1,5 +1,5 @@
 /**
- * @backstop/connectors — capability manifests & compensators.
+ * @agentrewind/connectors — capability manifests & compensators.
  */
 export { Sandbox, SandboxViolation } from "./fs/sandbox.js";
 export * as fsOps from "./fs/ops.js";

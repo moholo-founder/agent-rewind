@@ -12,8 +12,8 @@ import {
   createFilesystemMcpServer,
   seedInbox,
   type EmailStore,
-} from "@backstop/connectors";
-import { BackstopRuntime, createProxyServer } from "@backstop/proxy";
+} from "@agentrewind/connectors";
+import { AgentRewindRuntime, createProxyServer } from "@agentrewind/proxy";
 import { createApiServer } from "./server.js";
 
 /**
@@ -23,7 +23,7 @@ import { createApiServer } from "./server.js";
 
 let tmpDir: string;
 let root: string;
-let runtime: BackstopRuntime;
+let runtime: AgentRewindRuntime;
 let agent: Client;
 let emailStore: EmailStore;
 let httpServer: Server;
@@ -38,11 +38,11 @@ async function api(pathname: string, init?: RequestInit): Promise<{ status: numb
 }
 
 beforeEach(async () => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "backstop-api-"));
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rewind-api-"));
   root = path.join(tmpDir, "sandbox");
   fs.mkdirSync(root);
 
-  runtime = new BackstopRuntime({
+  runtime = new AgentRewindRuntime({
     dbPath: path.join(tmpDir, "journal.sqlite"),
     snapshotDir: path.join(tmpDir, "snaps"),
   });

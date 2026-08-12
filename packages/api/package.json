@@ -1,5 +1,5 @@
 {
-  "name": "@backstop/api",
+  "name": "@agentrewind/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,9 +17,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@backstop/connectors": "workspace:^",
-    "@backstop/core": "workspace:*",
-    "@backstop/proxy": "workspace:^",
+    "@agentrewind/connectors": "workspace:^",
+    "@agentrewind/core": "workspace:*",
+    "@agentrewind/proxy": "workspace:^",
     "express": "^5.2.1"
   },
   "devDependencies": {

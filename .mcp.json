@@ -1,10 +1,10 @@
 {
   "mcpServers": {
-    "backstop": {
+    "agent-rewind": {
       "command": "node",
       "args": ["packages/demo/dist/serve.js"],
       "env": {
-        "BACKSTOP_PORT": "4821"
+        "AGENT_REWIND_PORT": "4821"
       }
     }
   }

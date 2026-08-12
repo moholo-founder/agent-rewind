@@ -1,5 +1,5 @@
 {
-  "name": "@backstop/demo",
+  "name": "@agentrewind/demo",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,10 +12,10 @@
     "demo": "node dist/index.js"
   },
   "dependencies": {
-    "@backstop/api": "workspace:^",
-    "@backstop/connectors": "workspace:^",
-    "@backstop/core": "workspace:*",
-    "@backstop/proxy": "workspace:^",
+    "@agentrewind/api": "workspace:^",
+    "@agentrewind/connectors": "workspace:^",
+    "@agentrewind/core": "workspace:*",
+    "@agentrewind/proxy": "workspace:^",
     "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "devDependencies": {

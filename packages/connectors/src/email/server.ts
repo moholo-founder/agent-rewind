@@ -5,7 +5,7 @@ import { EmailStore, type EmailFolder } from "./store.js";
 /**
  * Self-contained mock email MCP server.
  *
- * Tools prefixed `admin__` exist for Backstop's compensators only: the
+ * Tools prefixed `admin__` exist for Agent Rewind's compensators only: the
  * proxy hides them from the agent's tool list and the agent can never call
  * them (the proxy routes by the listed tools, and even a direct call would
  * be journaled as unknown/held). They are the restore/recall surface.
@@ -25,9 +25,9 @@ export function createEmailMcpServer(
   options: EmailServerOptions = {},
 ): { server: McpServer; store: EmailStore } {
   const deliveryWindowMs = options.deliveryWindowMs ?? 60_000;
-  const selfAddress = options.selfAddress ?? "agent@backstop.local";
+  const selfAddress = options.selfAddress ?? "agent@agent-rewind.local";
   const store = new EmailStore(dbPath);
-  const server = new McpServer({ name: "backstop-mock-email", version: "0.1.0" });
+  const server = new McpServer({ name: "agent-rewind-mock-email", version: "0.1.0" });
 
   const ok = (payload: unknown) => ({
     content: [{ type: "text" as const, text: JSON.stringify(payload) }],

@@ -3,11 +3,11 @@ import { ActionRow } from "./ActionRow";
 import { api } from "./api";
 import { RewindModal } from "./RewindModal";
 import type { ActionRecord } from "./types";
-import { useBackstop } from "./useBackstop";
+import { useAgentRewind } from "./useAgentRewind";
 import "./styles.css";
 
 export function App() {
-  const { connected, stopped, actions, refresh } = useBackstop();
+  const { connected, stopped, actions, refresh } = useAgentRewind();
   const [rewindAnchor, setRewindAnchor] = useState<{ iso: string; label: string } | null>(null);
 
   const held = useMemo(() => actions.filter((a) => a.status === "held"), [actions]);
@@ -43,7 +43,7 @@ export function App() {
     <div className="app">
       <header className="header">
         <div className="brand">
-          <h1>BACKSTOP</h1>
+          <h1>AGENT REWIND</h1>
           <span className="tag">flight recorder for AI agents</span>
         </div>
         <span className={`conn ${connected ? "live" : "dead"}`}>
@@ -114,7 +114,7 @@ export function App() {
         </div>
         {actions.length === 0 ? (
           <div className="empty">
-            No actions yet — Backstop is listening. Point an agent at the proxy
+            No actions yet — Agent Rewind is listening. Point an agent at the proxy
             and everything it does will appear here.
           </div>
         ) : (

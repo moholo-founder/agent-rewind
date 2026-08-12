@@ -1,0 +1,12 @@
+{
+  "retention_days": 365,
+  "backups": {
+    "enabled": true,
+    "schedule": "daily",
+    "keep": 30
+  },
+  "alerts": [
+    "finance@acme.example",
+    "ops@acme.example"
+  ]
+}

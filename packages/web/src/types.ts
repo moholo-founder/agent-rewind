@@ -1,4 +1,4 @@
-/** Wire types mirrored from @backstop/core (kept dependency-free). */
+/** Wire types mirrored from @agentrewind/core (kept dependency-free). */
 
 export type ActionClass = "read" | "reversible" | "destructive" | "unknown";
 

@@ -15,10 +15,10 @@ import {
   type TimelineEvent,
   type ToolCapability,
   type UndoResult,
-} from "@backstop/core";
+} from "@agentrewind/core";
 
 /**
- * BackstopRuntime — the choke point every agent action flows through.
+ * AgentRewindRuntime — the choke point every agent action flows through.
  *
  * Owns the journal, snapshot store, connector manifests, downstream MCP
  * clients, the STOP flag, the held-action queue, and undo/rewind execution.
@@ -45,7 +45,7 @@ interface RouteEntry {
   capability: ToolCapability | undefined;
 }
 
-export class BackstopRuntime {
+export class AgentRewindRuntime {
   readonly journal: Journal;
   readonly snapshots: SnapshotStore;
   readonly events = new EventEmitter();
@@ -209,7 +209,7 @@ export class BackstopRuntime {
           content: [
             {
               type: "text",
-              text: "Backstop kill switch is engaged. All side-effecting actions are refused until a human operator resumes.",
+              text: "Agent Rewind kill switch is engaged. All side-effecting actions are refused until a human operator resumes.",
             },
           ],
         };

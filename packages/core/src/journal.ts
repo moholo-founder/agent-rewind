@@ -339,7 +339,7 @@ export class Journal {
   }
 
   // ---- durable STOP flag -------------------------------------------------
-  // Lives in Backstop's own storage, outside any agent context, so context
+  // Lives in Agent Rewind's own storage, outside any agent context, so context
   // compaction or a "creative" agent cannot erase it. Only an explicit
   // human resume() clears it.
 

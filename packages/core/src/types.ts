@@ -1,5 +1,5 @@
 /**
- * Shared type vocabulary for the Backstop reversibility model.
+ * Shared type vocabulary for the Agent Rewind reversibility model.
  */
 
 /** How a tool call is classified by its connector's capability manifest. */

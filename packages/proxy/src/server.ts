@@ -3,16 +3,16 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import type { BackstopRuntime } from "./runtime.js";
+import type { AgentRewindRuntime } from "./runtime.js";
 
 /**
  * The agent-facing MCP server: re-exposes every downstream tool (minus
  * admin-only ones) and funnels each call through the runtime's gate.
- * Deliberately a thin shell — all decisions live in BackstopRuntime.
+ * Deliberately a thin shell — all decisions live in AgentRewindRuntime.
  */
-export function createProxyServer(runtime: BackstopRuntime): Server {
+export function createProxyServer(runtime: AgentRewindRuntime): Server {
   const server = new Server(
-    { name: "backstop-proxy", version: "0.1.0" },
+    { name: "agent-rewind-proxy", version: "0.1.0" },
     { capabilities: { tools: {} } },
   );
 

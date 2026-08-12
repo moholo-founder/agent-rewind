@@ -31,7 +31,7 @@ export function seedInbox(store: EmailStore, count = 200): number {
     store.insert({
       folder: "inbox",
       from: `${sender}@example.com`,
-      to: "agent@backstop.local",
+      to: "agent@agent-rewind.local",
       subject: `${topic} (#${i + 1})`,
       body: [
         `Hi,`,

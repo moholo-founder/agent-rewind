@@ -1,5 +1,5 @@
 {
-  "name": "backstop",
+  "name": "agent-rewind",
   "version": "0.1.0",
   "private": true,
   "description": "Flight recorder + undo button for AI agents: an MCP interception proxy with journaling, snapshots, policy gating, kill switch, and rewind.",
@@ -10,7 +10,7 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
-    "demo": "pnpm -r build && pnpm --filter @backstop/demo demo"
+    "demo": "pnpm -r build && pnpm --filter @agentrewind/demo demo"
   },
   "devDependencies": {
     "typescript": "^5.5.4",

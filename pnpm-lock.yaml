@@ -15,15 +15,45 @@ importers:
         specifier: ^2.1.9
         version: 2.1.9(@types/node@22.20.1)
 
-  packages/api:
-    dependencies:
-      '@backstop/connectors':
+  packages/agent-rewind:
+    devDependencies:
+      '@agentrewind/api':
+        specifier: workspace:^
+        version: link:../api
+      '@agentrewind/connectors':
         specifier: workspace:^
         version: link:../connectors
-      '@backstop/core':
+      '@agentrewind/core':
+        specifier: workspace:^
+        version: link:../core
+      '@agentrewind/proxy':
+        specifier: workspace:^
+        version: link:../proxy
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.30.0
+        version: 1.30.0(zod@4.4.3)
+      '@types/node':
+        specifier: ^22
+        version: 22.20.1
+      esbuild:
+        specifier: ^0.25.0
+        version: 0.25.12
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.1)
+
+  packages/api:
+    dependencies:
+      '@agentrewind/connectors':
+        specifier: workspace:^
+        version: link:../connectors
+      '@agentrewind/core':
         specifier: workspace:*
         version: link:../core
-      '@backstop/proxy':
+      '@agentrewind/proxy':
         specifier: workspace:^
         version: link:../proxy
       express:
@@ -46,39 +76,9 @@ importers:
         specifier: ^3.2.7
         version: 3.2.7(@types/node@22.20.1)
 
-  packages/backstop:
-    devDependencies:
-      '@backstop/api':
-        specifier: workspace:^
-        version: link:../api
-      '@backstop/connectors':
-        specifier: workspace:^
-        version: link:../connectors
-      '@backstop/core':
-        specifier: workspace:^
-        version: link:../core
-      '@backstop/proxy':
-        specifier: workspace:^
-        version: link:../proxy
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.30.0
-        version: 1.30.0(zod@4.4.3)
-      '@types/node':
-        specifier: ^22
-        version: 22.20.1
-      esbuild:
-        specifier: ^0.25.0
-        version: 0.25.12
-      typescript:
-        specifier: ^5.5.4
-        version: 5.9.3
-      vitest:
-        specifier: ^3.2.4
-        version: 3.2.7(@types/node@22.20.1)
-
   packages/connectors:
     dependencies:
-      '@backstop/core':
+      '@agentrewind/core':
         specifier: workspace:*
         version: link:../core
       '@modelcontextprotocol/sdk':
@@ -112,16 +112,16 @@ importers:
 
   packages/demo:
     dependencies:
-      '@backstop/api':
+      '@agentrewind/api':
         specifier: workspace:^
         version: link:../api
-      '@backstop/connectors':
+      '@agentrewind/connectors':
         specifier: workspace:^
         version: link:../connectors
-      '@backstop/core':
+      '@agentrewind/core':
         specifier: workspace:*
         version: link:../core
-      '@backstop/proxy':
+      '@agentrewind/proxy':
         specifier: workspace:^
         version: link:../proxy
       '@modelcontextprotocol/sdk':
@@ -140,7 +140,7 @@ importers:
 
   packages/proxy:
     dependencies:
-      '@backstop/core':
+      '@agentrewind/core':
         specifier: workspace:*
         version: link:../core
       '@modelcontextprotocol/sdk':
@@ -150,7 +150,7 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@backstop/connectors':
+      '@agentrewind/connectors':
         specifier: workspace:^
         version: link:../connectors
       '@types/node':

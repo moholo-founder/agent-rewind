@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * Backstop live proxy over stdio — the entry point a real MCP client
+ * Agent Rewind live proxy over stdio — the entry point a real MCP client
  * (Claude Code, Claude Desktop/Cowork, anything MCP) launches.
  *
  *   node packages/demo/dist/serve.js
  *
  * stdin/stdout speak MCP to the agent; ALL logging goes to stderr. The
- * timeline API + UI come up on BACKSTOP_PORT (default 4821) so a human can
+ * timeline API + UI come up on AGENT_REWIND_PORT (default 4821) so a human can
  * watch/undo/stop while the agent works. State persists across runs in
- * BACKSTOP_HOME (default packages/demo/.backstop-live) — including the STOP
+ * AGENT_REWIND_HOME (default packages/demo/.agent-rewind-live) — including the STOP
  * flag: if you tripped the kill switch, a freshly launched proxy is still
  * stopped until a human resumes.
  */
@@ -18,24 +18,24 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { createApiServer } from "@backstop/api";
+import { createApiServer } from "@agentrewind/api";
 import {
   createEmailConnector,
   createFilesystemConnector,
-} from "@backstop/connectors";
-import { BackstopRuntime, createProxyServer } from "@backstop/proxy";
+} from "@agentrewind/connectors";
+import { AgentRewindRuntime, createProxyServer } from "@agentrewind/proxy";
 import { seedSandbox } from "./seed-files.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "../../..");
-const home = process.env.BACKSTOP_HOME
-  ? path.resolve(process.env.BACKSTOP_HOME)
-  : path.resolve(here, "../.backstop-live");
+const home = process.env.AGENT_REWIND_HOME
+  ? path.resolve(process.env.AGENT_REWIND_HOME)
+  : path.resolve(here, "../.agent-rewind-live");
 const sandboxRoot = path.join(home, "sandbox");
-const port = Number(process.env.BACKSTOP_PORT ?? 4821);
-const sendWindowMs = Number(process.env.BACKSTOP_SEND_WINDOW_MS ?? 180_000);
+const port = Number(process.env.AGENT_REWIND_PORT ?? 4821);
+const sendWindowMs = Number(process.env.AGENT_REWIND_SEND_WINDOW_MS ?? 180_000);
 
-const log = (msg: string) => console.error(`[backstop] ${msg}`);
+const log = (msg: string) => console.error(`[agent-rewind] ${msg}`);
 
 async function main(): Promise<void> {
   if (!fs.existsSync(sandboxRoot)) {
@@ -43,12 +43,12 @@ async function main(): Promise<void> {
     log(`Seeded sandbox at ${sandboxRoot}`);
   }
 
-  const runtime = new BackstopRuntime({
+  const runtime = new AgentRewindRuntime({
     dbPath: path.join(home, "journal.sqlite"),
     snapshotDir: path.join(home, "snapshots"),
   });
 
-  const fsClient = new Client({ name: "backstop-runtime-fs", version: "0.1.0" });
+  const fsClient = new Client({ name: "agent-rewind-runtime-fs", version: "0.1.0" });
   await fsClient.connect(
     new StdioClientTransport({
       command: process.execPath,
@@ -57,11 +57,11 @@ async function main(): Promise<void> {
   );
   const { manifest: fsManifest } = createFilesystemConnector({
     root: sandboxRoot,
-    holdThreshold: Number(process.env.BACKSTOP_FS_HOLD_THRESHOLD ?? 25),
+    holdThreshold: Number(process.env.AGENT_REWIND_FS_HOLD_THRESHOLD ?? 25),
   });
   await runtime.registerConnector(fsManifest, fsClient);
 
-  const emailClient = new Client({ name: "backstop-runtime-email", version: "0.1.0" });
+  const emailClient = new Client({ name: "agent-rewind-runtime-email", version: "0.1.0" });
   await emailClient.connect(
     new StdioClientTransport({
       command: process.execPath,
@@ -73,7 +73,7 @@ async function main(): Promise<void> {
     }),
   );
   const { manifest: emailManifest } = createEmailConnector({
-    holdThreshold: Number(process.env.BACKSTOP_EMAIL_HOLD_THRESHOLD ?? 250),
+    holdThreshold: Number(process.env.AGENT_REWIND_EMAIL_HOLD_THRESHOLD ?? 250),
   });
   await runtime.registerConnector(emailManifest, emailClient);
   log("Downstream MCP servers up (filesystem + mock email)");
@@ -93,7 +93,7 @@ async function main(): Promise<void> {
   // Last: hand stdio to the MCP proxy. From here on, stdout is protocol.
   const proxy = createProxyServer(runtime);
   await proxy.connect(new StdioServerTransport());
-  log("Backstop proxy connected — intercepting.");
+  log("Agent Rewind proxy connected — intercepting.");
 }
 
 main().catch((err) => {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Backstop stdio entry point: boot the full stack and expose the proxy over
+ * Agent Rewind stdio entry point: boot the full stack and expose the proxy over
  * stdio for any MCP client (Claude Desktop, Claude Code, Cursor, ...).
  *
  * The MCP client spawns this process; the agent talks MCP on stdin/stdout.
@@ -21,8 +21,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import {
   createEmailConnector,
   createFilesystemConnector,
-} from "@backstop/connectors";
-import { BackstopRuntime, createProxyServer } from "@backstop/proxy";
+} from "@agentrewind/connectors";
+import { AgentRewindRuntime, createProxyServer } from "@agentrewind/proxy";
 import { createApiServer } from "./server.js";
 
 function arg(name: string): string | undefined {
@@ -34,18 +34,18 @@ const flag = (name: string): boolean => process.argv.includes(`--${name}`);
 const sandboxRoot = arg("sandbox");
 if (!sandboxRoot) {
   console.error(
-    "Usage: backstop --sandbox <dir> [--data <dir>] [--port <n>] [--no-email]",
+    "Usage: agent-rewind --sandbox <dir> [--data <dir>] [--port <n>] [--no-email]",
   );
   process.exit(1);
 }
-const dataDir = arg("data") ?? path.join(sandboxRoot, "..", ".backstop");
+const dataDir = arg("data") ?? path.join(sandboxRoot, "..", ".agent-rewind");
 const port = Number(arg("port") ?? 4820);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const connectorsDist = path.resolve(here, "../../connectors/dist");
 
 async function spawnDownstream(name: string, scriptArgs: string[]): Promise<Client> {
-  const client = new Client({ name: `backstop-runtime-${name}`, version: "0.1.0" });
+  const client = new Client({ name: `agent-rewind-runtime-${name}`, version: "0.1.0" });
   await client.connect(
     new StdioClientTransport({
       command: process.execPath,
@@ -56,7 +56,7 @@ async function spawnDownstream(name: string, scriptArgs: string[]): Promise<Clie
   return client;
 }
 
-const runtime = new BackstopRuntime({
+const runtime = new AgentRewindRuntime({
   dbPath: path.join(dataDir, "journal.sqlite"),
   snapshotDir: path.join(dataDir, "snapshots"),
 });
@@ -82,10 +82,10 @@ if (!flag("no-email")) {
 // Operator API (and, once built, the timeline UI) on localhost only.
 const app = createApiServer(runtime);
 app.listen(port, "127.0.0.1", () => {
-  console.error(`[backstop] timeline API on http://127.0.0.1:${port} — sandbox: ${sandboxRoot}`);
+  console.error(`[agent-rewind] timeline API on http://127.0.0.1:${port} — sandbox: ${sandboxRoot}`);
 });
 
 // Agent-facing proxy over stdio. This must be last: from here on the MCP
 // client owns stdin/stdout.
 await createProxyServer(runtime).connect(new StdioServerTransport());
-console.error("[backstop] proxy ready on stdio");
+console.error("[agent-rewind] proxy ready on stdio");

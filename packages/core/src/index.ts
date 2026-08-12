@@ -1,5 +1,5 @@
 /**
- * @backstop/core — journal, snapshot store, policy engine, reversibility model.
+ * @agentrewind/core — journal, snapshot store, policy engine, reversibility model.
  */
 export * from "./types.js";
 export { Journal, type NewAction } from "./journal.js";

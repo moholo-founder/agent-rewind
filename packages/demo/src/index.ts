@@ -1,11 +1,11 @@
 /**
- * Backstop demo: boots the full stack and unleashes a scripted "rogue
+ * Agent Rewind demo: boots the full stack and unleashes a scripted "rogue
  * agent" so the operator can watch the timeline fill up, approve the held
  * bulk delete, hit STOP, and Rewind everything back.
  *
  * Everything runs locally:
  *   - downstream filesystem + email MCP servers as real stdio child processes
- *   - Backstop proxy + runtime in this process
+ *   - Agent Rewind proxy + runtime in this process
  *   - API + timeline UI on http://localhost:4820
  */
 import fs from "node:fs";
@@ -14,22 +14,22 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createApiServer } from "@backstop/api";
+import { createApiServer } from "@agentrewind/api";
 import {
   createEmailConnector,
   createFilesystemConnector,
-} from "@backstop/connectors";
-import { BackstopRuntime, createProxyServer } from "@backstop/proxy";
+} from "@agentrewind/connectors";
+import { AgentRewindRuntime, createProxyServer } from "@agentrewind/proxy";
 import { seedSandbox } from "./seed-files.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "../../..");
-const demoDir = path.resolve(here, "../.backstop-demo");
+const demoDir = path.resolve(here, "../.agent-rewind-demo");
 const sandboxRoot = path.join(demoDir, "sandbox");
 const PORT = 4820;
 const SEND_WINDOW_MS = 180_000; // 3 minutes to recall a sent email
 
-const log = (msg: string) => console.log(`\x1b[36m[backstop-demo]\x1b[0m ${msg}`);
+const log = (msg: string) => console.log(`\x1b[36m[agent-rewind-demo]\x1b[0m ${msg}`);
 const agentSays = (msg: string) => console.log(`\x1b[33m[rogue-agent]\x1b[0m ${msg}`);
 
 async function main(): Promise<void> {
@@ -38,14 +38,14 @@ async function main(): Promise<void> {
   seedSandbox(sandboxRoot);
   log(`Sandbox seeded at ${sandboxRoot}`);
 
-  const runtime = new BackstopRuntime({
+  const runtime = new AgentRewindRuntime({
     dbPath: path.join(demoDir, "journal.sqlite"),
     snapshotDir: path.join(demoDir, "snapshots"),
   });
 
   // Downstream servers as real stdio children — the same wire an external
   // MCP client would use.
-  const fsClient = new Client({ name: "backstop-runtime-fs", version: "0.1.0" });
+  const fsClient = new Client({ name: "agent-rewind-runtime-fs", version: "0.1.0" });
   await fsClient.connect(
     new StdioClientTransport({
       command: process.execPath,
@@ -61,7 +61,7 @@ async function main(): Promise<void> {
   });
   await runtime.registerConnector(fsManifest, fsClient);
 
-  const emailClient = new Client({ name: "backstop-runtime-email", version: "0.1.0" });
+  const emailClient = new Client({ name: "agent-rewind-runtime-email", version: "0.1.0" });
   await emailClient.connect(
     new StdioClientTransport({
       command: process.execPath,
@@ -167,7 +167,7 @@ async function main(): Promise<void> {
   log("  4. Hit ⏪ Rewind… (top right) → preview → confirm → watch 200 emails and every file come back.");
   log("  5. STOP trips the kill switch; the agent can't act until you RESUME.");
   log("");
-  log("Ctrl+C to exit. Demo state lives in packages/demo/.backstop-demo/ (wiped on next run).");
+  log("Ctrl+C to exit. Demo state lives in packages/demo/.agent-rewind-demo/ (wiped on next run).");
 }
 
 main().catch((err) => {

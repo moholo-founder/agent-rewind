@@ -13,7 +13,7 @@ let tmpDir: string;
 let journal: Journal;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "backstop-core-"));
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rewind-core-"));
   journal = new Journal(path.join(tmpDir, "journal.sqlite"));
 });
 
@@ -122,7 +122,7 @@ describe("Journal", () => {
 describe("SnapshotStore", () => {
   it("stores and retrieves a blob by content hash", () => {
     const store = new SnapshotStore(path.join(tmpDir, "snaps"), journal);
-    const content = Buffer.from("hello backstop");
+    const content = Buffer.from("hello agent-rewind");
     const ref = store.putBlob(content, { origin: "test" });
     expect(ref).toMatch(/^[0-9a-f]{64}$/);
     expect(store.getBlob(ref).equals(content)).toBe(true);

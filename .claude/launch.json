@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "backstop-demo",
+      "name": "agent-rewind-demo",
       "runtimeExecutable": "node",
       "runtimeArgs": ["packages/demo/dist/index.js"],
       "port": 4820

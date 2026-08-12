@@ -3,7 +3,7 @@ import type {
   Compensator,
   CompensatorContext,
   UndoResult,
-} from "@backstop/core";
+} from "@agentrewind/core";
 import type { EmailMessage } from "./store.js";
 
 /**

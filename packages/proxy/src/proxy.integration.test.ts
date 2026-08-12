@@ -7,19 +7,19 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createFilesystemConnector,
   createFilesystemMcpServer,
-} from "@backstop/connectors";
-import { BackstopRuntime } from "./runtime.js";
+} from "@agentrewind/connectors";
+import { AgentRewindRuntime } from "./runtime.js";
 import { createProxyServer } from "./server.js";
 
 /**
  * Integration tests through the real MCP SDK (no mocks of it):
- *   agent Client ⇄ Backstop proxy Server ⇄ downstream client ⇄ fs McpServer
+ *   agent Client ⇄ Agent Rewind proxy Server ⇄ downstream client ⇄ fs McpServer
  * All four endpoints speak actual MCP over linked transports.
  */
 
 let tmpDir: string;
 let root: string;
-let runtime: BackstopRuntime;
+let runtime: AgentRewindRuntime;
 let agent: Client;
 
 function text(result: Awaited<ReturnType<Client["callTool"]>>): string {
@@ -29,12 +29,12 @@ function text(result: Awaited<ReturnType<Client["callTool"]>>): string {
 }
 
 beforeEach(async () => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "backstop-proxy-"));
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rewind-proxy-"));
   root = path.join(tmpDir, "sandbox");
   fs.mkdirSync(root);
   fs.writeFileSync(path.join(root, "hello.txt"), "hello world");
 
-  runtime = new BackstopRuntime({
+  runtime = new AgentRewindRuntime({
     dbPath: path.join(tmpDir, "journal.sqlite"),
     snapshotDir: path.join(tmpDir, "snaps"),
   });
@@ -42,7 +42,7 @@ beforeEach(async () => {
   // Downstream: real fs MCP server over an in-memory MCP link.
   const fsServer = createFilesystemMcpServer(root);
   const [downClientT, downServerT] = InMemoryTransport.createLinkedPair();
-  const downstream = new Client({ name: "backstop-runtime", version: "0.1.0" });
+  const downstream = new Client({ name: "agent-rewind-runtime", version: "0.1.0" });
   await Promise.all([
     fsServer.connect(downServerT),
     downstream.connect(downClientT),

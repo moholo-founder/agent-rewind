@@ -5,13 +5,13 @@ import { Sandbox } from "./sandbox.js";
 
 /**
  * Downstream filesystem MCP server. This is the "real tool" the agent
- * thinks it is talking to; Backstop proxies in front of it. It enforces the
+ * thinks it is talking to; Agent Rewind proxies in front of it. It enforces the
  * sandbox itself as well — defense in depth, in case anyone ever wires an
  * agent to it directly.
  */
 export function createFilesystemMcpServer(root: string): McpServer {
   const sandbox = new Sandbox(root);
-  const server = new McpServer({ name: "backstop-fs", version: "0.1.0" });
+  const server = new McpServer({ name: "agent-rewind-fs", version: "0.1.0" });
 
   const ok = (payload: unknown) => ({
     content: [

@@ -1,10 +1,10 @@
 import express, { type Express, type Request, type Response } from "express";
 import path from "node:path";
-import type { BackstopRuntime } from "@backstop/proxy";
-import type { ActionRecord, TimelineEvent } from "@backstop/core";
+import type { AgentRewindRuntime } from "@agentrewind/proxy";
+import type { ActionRecord, TimelineEvent } from "@agentrewind/core";
 
 /**
- * Thin HTTP shell over BackstopRuntime for the timeline UI.
+ * Thin HTTP shell over AgentRewindRuntime for the timeline UI.
  *
  * REST for commands and history, Server-Sent Events for liveness. No auth
  * (explicit v1 non-goal) — bind to localhost.
@@ -18,7 +18,7 @@ interface PreStateView {
 }
 
 export function createApiServer(
-  runtime: BackstopRuntime,
+  runtime: AgentRewindRuntime,
   options: { staticDir?: string } = {},
 ): Express {
   const app = express();
@@ -163,7 +163,7 @@ export function createApiServer(
  * "before" side of a diff. File contents are inlined (capped); trees ship
  * their manifest without contents.
  */
-function resolvePreState(runtime: BackstopRuntime, ref: string): PreStateView {
+function resolvePreState(runtime: AgentRewindRuntime, ref: string): PreStateView {
   const record = runtime.snapshots.getRecord<PreStateView>(ref);
   if (record.kind === "file" && record.present && typeof record.contentRef === "string") {
     const blob = runtime.snapshots.getBlob(record.contentRef);

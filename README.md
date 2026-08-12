@@ -1,10 +1,10 @@
-# Backstop
+# Agent Rewind
 
 [![CI](https://github.com/moholo-founder/agent-rewind/actions/workflows/ci.yml/badge.svg)](https://github.com/moholo-founder/agent-rewind/actions/workflows/ci.yml)
 
 **A flight recorder + undo button for AI agents.**
 
-Backstop sits between an AI agent and its tools as a transparent MCP proxy. Every
+Agent Rewind sits between an AI agent and its tools as a transparent MCP proxy. Every
 action flows through it and is journaled, snapshotted for reversibility, risk-classified,
 and policy-gated before it executes. A live web timeline gives a human operator
 per-action **Undo**, a global **Rewind to time T**, a persistent **Kill Switch**, and an
@@ -56,25 +56,25 @@ Operator click-path:
    Wait out the window before rewinding and the report will honestly say
    `not-reversible — already delivered` instead.
 5. Hit **STOP** — every further side-effecting call is refused and journaled as
-   `blocked-by-stop` until you press RESUME. The flag lives in Backstop's SQLite,
+   `blocked-by-stop` until you press RESUME. The flag lives in Agent Rewind's SQLite,
    not in the agent's context, so no amount of agent "creativity" or context
    compaction clears it.
 
-Demo state lives in `packages/demo/.backstop-demo/` and is wiped on each run.
+Demo state lives in `packages/demo/.agent-rewind-demo/` and is wiped on each run.
 
 ## Install / use with an MCP client
 
-Backstop is pure JavaScript — **zero native dependencies, no compiler, no
+Agent Rewind is pure JavaScript — **zero native dependencies, no compiler, no
 toolchain** (SQLite comes from Node's built-in `node:sqlite`). Requires
 Node 22.5+. Verified by CI on Linux, macOS, and Windows (Node 22 & 24).
 
-Once published to npm (`packages/backstop`, name `backstop-mcp`), registration
+Once published to npm (`packages/agent-rewind`, name `agent-rewind`), registration
 is one block in any MCP client config:
 
 ```json
 {
   "mcpServers": {
-    "backstop": { "command": "npx", "args": ["-y", "backstop-mcp"] }
+    "agent-rewind": { "command": "npx", "args": ["-y", "agent-rewind"] }
   }
 }
 ```
@@ -84,15 +84,15 @@ Or from this repo today (used by the project's own `.mcp.json`):
 ```json
 {
   "mcpServers": {
-    "backstop": { "command": "node", "args": ["packages/demo/dist/serve.js"] }
+    "agent-rewind": { "command": "node", "args": ["packages/demo/dist/serve.js"] }
   }
 }
 ```
 
 Either way the timeline UI comes up on http://localhost:4821 and every tool
 call the agent makes is journaled, snapshotted, gated, and reversible. State
-(including the kill switch) persists in `~/.backstop` (npx) or
-`packages/demo/.backstop-live` (repo).
+(including the kill switch) persists in `~/.agent-rewind` (npx) or
+`packages/demo/.agent-rewind-live` (repo).
 
 ## How to run (dev)
 
@@ -105,12 +105,12 @@ pnpm -r test      # run all tests
 pnpm demo         # build + boot the full demo stack on :4820
 ```
 
-For UI development: `pnpm demo` in one terminal, `pnpm --filter @backstop/web dev`
+For UI development: `pnpm demo` in one terminal, `pnpm --filter @agentrewind/web dev`
 in another (Vite dev server proxies `/api` to :4820).
 
-To put Backstop in front of a real MCP client, run the downstream servers it
+To put Agent Rewind in front of a real MCP client, run the downstream servers it
 should wrap (e.g. `node packages/connectors/dist/fs/main.js <sandbox-root>`) and
-wire `BackstopRuntime` + `createProxyServer` over stdio — `packages/demo/src/index.ts`
+wire `AgentRewindRuntime` + `createProxyServer` over stdio — `packages/demo/src/index.ts`
 is the reference wiring.
 
 ## Layout
@@ -118,7 +118,7 @@ is the reference wiring.
 ```
 packages/
   core/         # journal, snapshot store, policy engine, reversibility model, rewind engine
-  proxy/        # BackstopRuntime (the gate) + agent-facing MCP server
+  proxy/        # AgentRewindRuntime (the gate) + agent-facing MCP server
   connectors/   # filesystem + mock-email: MCP servers, manifests, compensators
   api/          # express + SSE, serves timeline data and undo/rewind commands
   web/          # React timeline UI
@@ -131,7 +131,7 @@ packages/
 [ MCP client / agent ]
         │  (MCP)
         ▼
-  Backstop Proxy: classify → policy gate → capture pre-state →
+  Agent Rewind Proxy: classify → policy gate → capture pre-state →
                   forward downstream → journal + SSE → return result
         │  (MCP, stdio in the demo)
         ▼
@@ -149,7 +149,7 @@ Key rules, all enforced in code (not convention):
   later execute out of order), each undo in its own try/catch, and the report
   never claims restoration that didn't happen (`fullyRestored` requires every
   outcome to be `undone`).
-- **STOP is durable** — a flag in Backstop's own SQLite; only a human RESUME
+- **STOP is durable** — a flag in Agent Rewind's own SQLite; only a human RESUME
   clears it. Blocked calls are journaled as `blocked-by-stop`.
 - **No secrets in the journal** — a global denylist redactor (values → shape +
   hash + length) plus per-tool `redactFields` for connector opt-outs. Mock email
@@ -165,7 +165,7 @@ Key rules, all enforced in code (not convention):
 ## Design notes / decisions made along the way
 
 - **Held actions and restarts:** raw (unredacted) arguments for held actions live
-  only in runtime memory. If Backstop restarts, a held action can no longer
+  only in runtime memory. If Agent Rewind restarts, a held action can no longer
   execute and is auto-rejected on approval attempt — safe by construction.
 - **Approval under STOP:** approving a held action while the kill switch is
   tripped is refused; resume first.

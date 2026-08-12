@@ -9,7 +9,7 @@ import {
   SnapshotStore,
   type ActionRecord,
   type CompensatorContext,
-} from "@backstop/core";
+} from "@agentrewind/core";
 import { createEmailConnector } from "./connector.js";
 import { seedInbox } from "./seed.js";
 import { createEmailMcpServer } from "./server.js";
@@ -24,7 +24,7 @@ let ctx: CompensatorContext;
 const WINDOW_MS = 60_000;
 
 beforeEach(async () => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "backstop-email-"));
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rewind-email-"));
   journal = new Journal(path.join(tmpDir, "journal.sqlite"));
 
   const created = createEmailMcpServer(path.join(tmpDir, "email.sqlite"), {
@@ -122,7 +122,7 @@ describe("mock email connector", () => {
     const args = { to: "ceo@example.com", subject: "Resignation", body: "I quit!" };
 
     const ref = await cap.capture(args, ctx);
-    store.send({ from: "agent@backstop.local", deliveryWindowMs: WINDOW_MS, ...args });
+    store.send({ from: "agent@agent-rewind.local", deliveryWindowMs: WINDOW_MS, ...args });
     expect(store.count("outbox")).toBe(1);
 
     const result = await cap.undo(entryFor(ref, "send_message"), ctx);
@@ -138,7 +138,7 @@ describe("mock email connector", () => {
     const args = { to: "all@example.com", subject: "Oops", body: "..." };
 
     const ref = await cap.capture(args, ctx);
-    store.send({ from: "agent@backstop.local", deliveryWindowMs: 0, ...args });
+    store.send({ from: "agent@agent-rewind.local", deliveryWindowMs: 0, ...args });
     expect(store.deliverDue(new Date(Date.now() + 1))).toBe(1);
     expect(store.count("sent")).toBe(1);
 

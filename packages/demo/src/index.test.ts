@@ -7,7 +7,7 @@ import { seedSandbox } from "./seed-files.js";
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "backstop-demo-"));
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rewind-demo-"));
 });
 
 afterEach(() => {

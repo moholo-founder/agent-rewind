@@ -7,7 +7,7 @@ import {
   SnapshotStore,
   type ActionRecord,
   type CompensatorContext,
-} from "@backstop/core";
+} from "@agentrewind/core";
 import { createFilesystemConnector } from "./connector.js";
 import * as ops from "./ops.js";
 import { SandboxViolation } from "./sandbox.js";
@@ -18,7 +18,7 @@ let journal: Journal;
 let ctx: CompensatorContext;
 
 beforeEach(() => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "backstop-fs-"));
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-rewind-fs-"));
   root = path.join(tmpDir, "sandbox");
   journal = new Journal(path.join(tmpDir, "journal.sqlite"));
   ctx = {

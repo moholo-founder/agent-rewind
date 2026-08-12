@@ -6,14 +6,14 @@ import type {
   Compensator,
   CompensatorContext,
   UndoResult,
-} from "@backstop/core";
+} from "@agentrewind/core";
 import { countFiles } from "./ops.js";
 import { Sandbox } from "./sandbox.js";
 
 /**
  * Filesystem connector: capability manifest + compensators.
  *
- * Compensators run inside the Backstop runtime (same machine as the
+ * Compensators run inside the Agent Rewind runtime (same machine as the
  * downstream filesystem server) and use direct fs access through the same
  * Sandbox guard, so an undo can never escape the sandbox either.
  */
