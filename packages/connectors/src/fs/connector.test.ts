@@ -218,7 +218,7 @@ describe("blast radius", () => {
     for (let i = 0; i < 30; i++) {
       fs.writeFileSync(path.join(root, "big", i % 2 ? "sub" : ".", `f${i}.txt`), "x");
     }
-    const radius = await manifest.tools.delete_dir!.blastRadius!({ path: "big" });
+    const radius = await manifest.tools.delete_dir!.blastRadius!({ path: "big" }, ctx);
     expect(radius).toBe(30);
     expect(radius).toBeGreaterThan(manifest.holdThreshold);
   });

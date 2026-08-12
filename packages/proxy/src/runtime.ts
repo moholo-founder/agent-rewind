@@ -148,7 +148,9 @@ export class BackstopRuntime {
     const { manifest } = route.connector;
     const cap = route.capability;
     const toolClass = cap?.class ?? "unknown";
-    const blastRadius = cap?.blastRadius ? await cap.blastRadius(args) : 1;
+    const blastRadius = cap?.blastRadius
+      ? await cap.blastRadius(args, this.contextFor(route.connector))
+      : 1;
     const riskScore = cap?.riskScore ?? defaultRiskScore(toolClass);
     const summary = cap?.summarize?.(args) ?? `${manifest.connector}.${tool}`;
     const argsRedacted = redactArgs(args, cap?.redactFields ?? []);

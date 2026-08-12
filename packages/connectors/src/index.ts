@@ -8,3 +8,7 @@ export {
   type FilesystemConnector,
 } from "./fs/connector.js";
 export { createFilesystemMcpServer } from "./fs/server.js";
+export { EmailStore, type EmailMessage, type EmailFolder } from "./email/store.js";
+export { createEmailMcpServer, type EmailServerOptions } from "./email/server.js";
+export { createEmailConnector } from "./email/connector.js";
+export { seedInbox } from "./email/seed.js";

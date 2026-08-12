@@ -120,7 +120,10 @@ export interface ToolCapability {
   /** Required for every non-read tool. */
   compensator?: Compensator;
   /** Magnitude of the action (file count, recipient count, ...). Default 1. */
-  blastRadius?(args: Record<string, unknown>): number | Promise<number>;
+  blastRadius?(
+    args: Record<string, unknown>,
+    ctx: CompensatorContext,
+  ): number | Promise<number>;
   /** 0..1 heuristic used for display; defaults derived from class. */
   riskScore?: number;
   /** Human-readable summary for the timeline ("Deleted 200 files in /x"). */
