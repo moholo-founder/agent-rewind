@@ -193,12 +193,19 @@ describe("sandbox guard", () => {
     expect(() => sandbox.resolve("/etc/passwd")).toThrow(SandboxViolation);
   });
 
-  it("refuses symlink escapes", () => {
+  it("refuses symlink escapes", (ctx) => {
     const { sandbox } = createFilesystemConnector({ root });
     const outside = path.join(tmpDir, "outside-secret");
     fs.mkdirSync(outside);
     fs.writeFileSync(path.join(outside, "secret.txt"), "leak me");
-    fs.symlinkSync(outside, path.join(root, "sneaky"));
+    try {
+      fs.symlinkSync(outside, path.join(root, "sneaky"));
+    } catch {
+      // Windows without symlink privilege can't create the attack vector at
+      // all — nothing to guard against; skip rather than fake a pass.
+      ctx.skip();
+      return;
+    }
 
     expect(() => sandbox.resolve("sneaky/secret.txt")).toThrow(SandboxViolation);
     expect(() => ops.readFile(sandbox, "sneaky/secret.txt")).toThrow(SandboxViolation);
