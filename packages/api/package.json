@@ -17,9 +17,15 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@backstop/core": "workspace:*"
+    "@backstop/connectors": "workspace:^",
+    "@backstop/core": "workspace:*",
+    "@backstop/proxy": "workspace:^",
+    "express": "^5.2.1"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^20.17.9",
     "typescript": "^5.5.4",
     "vitest": "^2.1.9"
   }
