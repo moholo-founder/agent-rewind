@@ -51,6 +51,8 @@ interface SendPreState {
   kind: "email-send";
   to: string;
   subject: string;
+  /** Capture instant: disambiguates two sends with identical to+subject. */
+  capturedAt?: string;
 }
 
 export function createEmailConnector(options: { holdThreshold?: number } = {}): {
@@ -125,6 +127,7 @@ export function createEmailConnector(options: { holdThreshold?: number } = {}): 
         kind: "email-send",
         to: str(args, "to"),
         subject: str(args, "subject"),
+        capturedAt: new Date().toISOString(),
       };
       return ctx.snapshots.putRecord(pre, { connector: "email", tool: "send_message" });
     },
@@ -136,7 +139,11 @@ export function createEmailConnector(options: { holdThreshold?: number } = {}): 
       const result = await call<{ canceled: boolean; reason: string }>(
         ctx,
         "admin__cancel_send",
-        { to: pre.to, subject: pre.subject },
+        {
+          to: pre.to,
+          subject: pre.subject,
+          ...(pre.capturedAt ? { after: pre.capturedAt } : {}),
+        },
       );
       if (result.canceled) {
         return { outcome: "undone", detail: result.reason };

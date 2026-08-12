@@ -35,7 +35,7 @@ import {
   seedInbox,
 } from "@agentrewind/connectors";
 import { AgentRewindRuntime, createProxyServer } from "@agentrewind/proxy";
-import { seedSandbox } from "./seed.js";
+import { seedDemoSandbox } from "@agentrewind/connectors";
 
 const selfScript = fileURLToPath(import.meta.url);
 const log = (msg: string) => console.error(`[agent-rewind] ${msg}`);
@@ -66,8 +66,15 @@ async function serveCmd(): Promise<void> {
   const sendWindowMs = Number(process.env.AGENT_REWIND_SEND_WINDOW_MS ?? 180_000);
 
   if (!fs.existsSync(sandboxRoot)) {
-    seedSandbox(sandboxRoot);
-    log(`Seeded demo sandbox at ${sandboxRoot} (set AGENT_REWIND_SANDBOX to use your own)`);
+    if (process.env.AGENT_REWIND_SANDBOX) {
+      // The user pointed at their OWN sandbox: create it empty. Demo CSVs
+      // belong only in the default demo sandbox.
+      fs.mkdirSync(sandboxRoot, { recursive: true });
+      log(`Created sandbox at ${sandboxRoot}`);
+    } else {
+      seedDemoSandbox(sandboxRoot);
+      log(`Seeded demo sandbox at ${sandboxRoot} (set AGENT_REWIND_SANDBOX to use your own)`);
+    }
   }
 
   const runtime = new AgentRewindRuntime({
@@ -110,8 +117,18 @@ async function serveCmd(): Promise<void> {
     runtime,
     fs.existsSync(webDir) ? { staticDir: webDir } : {},
   );
-  app.listen(port, "127.0.0.1", () => {
+  const server = app.listen(port, "127.0.0.1", () => {
     log(`Timeline UI: http://localhost:${port}`);
+  });
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    // Fail loudly: silently pointing the operator at a URL served by a
+    // DIFFERENT runtime would wire STOP/Undo to the wrong journal.
+    if (err.code === "EADDRINUSE") {
+      log(`FATAL: port ${port} is already in use (another Agent Rewind instance?). Set AGENT_REWIND_PORT to run side by side.`);
+    } else {
+      log(`FATAL: timeline server failed: ${err.message}`);
+    }
+    process.exit(1);
   });
 
   const proxy = createProxyServer(runtime);

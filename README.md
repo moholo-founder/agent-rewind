@@ -68,7 +68,7 @@ Demo state lives in `packages/demo/.agent-rewind-demo/` and is wiped on each run
 
 Agent Rewind is pure JavaScript — **zero native dependencies, no compiler, no
 toolchain** (SQLite comes from Node's built-in `node:sqlite`). Requires
-Node 22.5+. Verified by CI on Linux, macOS, and Windows (Node 22 & 24).
+Node 22.13+. Verified by CI on Linux, macOS, and Windows (Node 22 & 24).
 
 Once published to npm (`packages/agent-rewind`, name `agent-rewind`), registration
 is one block in any MCP client config:
@@ -98,7 +98,7 @@ call the agent makes is journaled, snapshotted, gated, and reversible. State
 
 ## How to run (dev)
 
-Requires Node 22.5+ and pnpm 9+.
+Requires Node 22.13+ and pnpm 9+.
 
 ```bash
 pnpm install
@@ -200,7 +200,7 @@ See also [TERMS.md](TERMS.md) and the contributor agreement in
 - Multi-user auth, accounts, billing, cloud deployment.
 - ROI/attribution analytics and enterprise audit export (later products off the
   same journal).
-- Distributed/HA storage (v1 is local disk + SQLite; note: `better-sqlite3` is a
-  native module pinned to the Node ABI — rebuild on Node major upgrades).
+- Distributed/HA storage (v1 is local disk + SQLite via Node's built-in
+  `node:sqlite` — no native modules).
 - HTTP/SSE MCP transport (v1 is stdio + in-memory).
 - Persisting held-action payloads across restarts; empty-directory restoration.

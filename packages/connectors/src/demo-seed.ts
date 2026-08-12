@@ -6,7 +6,7 @@ import path from "node:path";
  * a 40-file quarterly-reports folder (big enough to trip the blast-radius
  * hold), some notes, and a config the rogue agent will clobber.
  */
-export function seedSandbox(root: string): void {
+export function seedDemoSandbox(root: string): void {
   fs.mkdirSync(root, { recursive: true });
 
   fs.writeFileSync(

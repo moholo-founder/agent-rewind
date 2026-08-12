@@ -15,6 +15,11 @@ import type {
  * report states per-action truth. `fullyRestored` is true only when every
  * outcome is `undone` — the system never claims the world is restored when
  * it isn't.
+ *
+ * Concurrency honesty: each action is re-read at its turn — a row a
+ * concurrent single-undo already flipped is reported as already-undone
+ * rather than re-run, and a transition raced by another writer downgrades
+ * that one outcome instead of aborting the whole rewind.
  */
 
 export interface UndoRunner {
@@ -30,45 +35,77 @@ export async function executeRewind(params: {
   journal: Journal;
   anchorIso: string;
   runUndo: UndoRunner;
+  /**
+   * When provided, only these action ids are undone (the set the operator
+   * previewed and confirmed) — actions executed between preview and confirm
+   * are NOT silently swept in.
+   */
+  onlyActionIds?: readonly string[];
   /** Called after each action's outcome is journaled (drives live UI). */
   onOutcome?: (action: ActionRecord, result: UndoResult) => void;
 }): Promise<RewindReport> {
-  const { journal, anchorIso, runUndo, onOutcome } = params;
+  const { journal, anchorIso, runUndo, onlyActionIds, onOutcome } = params;
   const startedTs = new Date().toISOString();
-  const plan = planRewind(journal, anchorIso);
+  let plan = planRewind(journal, anchorIso);
+  if (onlyActionIds) {
+    const wanted = new Set(onlyActionIds);
+    plan = plan.filter((a) => wanted.has(a.id));
+  }
   const outcomes: RewindReport["outcomes"] = [];
 
-  for (const action of plan) {
+  for (const planned of plan) {
+    // Re-read at execution time: the world may have moved since planning.
+    const action = journal.get(planned.id);
     let result: UndoResult;
-    try {
-      result = await runUndo(action);
-    } catch (err) {
+    if (action.status === "undone") {
       result = {
-        outcome: "failed",
-        detail: `Undo threw: ${err instanceof Error ? err.message : String(err)}`,
+        outcome: "undone",
+        detail: "Already undone before this rewind reached it",
       };
-    }
+    } else if (action.status !== "executed" && action.status !== "undo-failed") {
+      result = {
+        outcome: "not-reversible",
+        detail: `Status changed to ${action.status} since the rewind was planned; skipped`,
+      };
+    } else {
+      try {
+        result = await runUndo(action);
+      } catch (err) {
+        result = {
+          outcome: "failed",
+          detail: `Undo threw: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
 
-    // Journal a compensating entry linked to the original, then update the
-    // original's lifecycle status. Originals are never rewritten beyond that.
-    const undoOk = result.outcome === "undone";
-    journal.record({
-      sessionId: "rewind",
-      connector: action.connector,
-      tool: `undo:${action.tool}`,
-      argsRedacted: { originalActionId: action.id },
-      class: "reversible",
-      riskScore: 0,
-      blastRadius: action.blastRadius,
-      status: undoOk ? "executed" : "failed",
-      executedTs: new Date().toISOString(),
-      resultSummary: result.detail,
-      causedBy: action.id,
-    });
-    if (result.outcome !== "not-reversible") {
-      journal.transition(action.id, undoOk ? "undone" : "undo-failed", {
-        resultSummary: result.detail,
-      });
+      // Journal a compensating entry linked to the original, then update the
+      // original's lifecycle status. A failure in this bookkeeping downgrades
+      // THIS action's outcome — it must never abort the remaining undos.
+      try {
+        const undoOk = result.outcome === "undone";
+        journal.record({
+          sessionId: "rewind",
+          connector: action.connector,
+          tool: `undo:${action.tool}`,
+          argsRedacted: { originalActionId: action.id },
+          class: "reversible",
+          riskScore: 0,
+          blastRadius: action.blastRadius,
+          status: undoOk ? "executed" : "failed",
+          executedTs: new Date().toISOString(),
+          resultSummary: result.detail,
+          causedBy: action.id,
+        });
+        if (result.outcome !== "not-reversible") {
+          journal.transition(action.id, undoOk ? "undone" : "undo-failed", {
+            resultSummary: result.detail,
+          });
+        }
+      } catch (err) {
+        result = {
+          outcome: result.outcome === "undone" ? "partial" : result.outcome,
+          detail: `${result.detail} — BUT journaling the outcome failed: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
     }
 
     outcomes.push({
@@ -79,7 +116,11 @@ export async function executeRewind(params: {
       outcome: result.outcome,
       detail: result.detail,
     });
-    onOutcome?.(journal.get(action.id), result);
+    try {
+      onOutcome?.(journal.get(action.id), result);
+    } catch {
+      // UI notification must never affect the rewind itself.
+    }
   }
 
   const report: RewindReport = {

@@ -22,6 +22,7 @@ export function ActionRow({
 }) {
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<ActionDetail | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [undoNote, setUndoNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -36,10 +37,11 @@ export function ActionRow({
     const next = !open;
     setOpen(next);
     if (next && !detail) {
+      setDetailError(null);
       try {
         setDetail(await api.actionDetail(action.id));
-      } catch {
-        /* row stays open with args only */
+      } catch (err) {
+        setDetailError(err instanceof Error ? err.message : String(err));
       }
     }
   };
@@ -119,6 +121,10 @@ export function ActionRow({
           )}
           {detail ? (
             <DiffView detail={detail} />
+          ) : detailError ? (
+            <div className="kv" style={{ color: "var(--danger)" }}>
+              Failed to load detail: {detailError}
+            </div>
           ) : (
             <div className="kv">loading…</div>
           )}

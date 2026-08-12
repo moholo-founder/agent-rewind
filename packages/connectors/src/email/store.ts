@@ -151,22 +151,32 @@ export class EmailStore {
   /**
    * Recall an outbox message (undo of send within the window). Honest about
    * why it can't when the window has elapsed.
+   *
+   * `after` narrows the match to messages queued at/after that instant (the
+   * compensator's capture time), so two sends with identical to+subject each
+   * recall THEIR OWN message: ORDER BY ts ASC picks the first send after the
+   * corresponding capture.
    */
-  cancelSend(match: { to: string; subject: string }): { canceled: boolean; reason: string; id?: string } {
+  cancelSend(match: {
+    to: string;
+    subject: string;
+    after?: string;
+  }): { canceled: boolean; reason: string; id?: string } {
+    const after = match.after ?? "";
     const inOutbox = this.db
       .prepare(
-        "SELECT * FROM messages WHERE folder = 'outbox' AND to_addr = ? AND subject = ? ORDER BY ts DESC LIMIT 1",
+        "SELECT * FROM messages WHERE folder = 'outbox' AND to_addr = ? AND subject = ? AND ts >= ? ORDER BY ts ASC LIMIT 1",
       )
-      .get(match.to, match.subject) as unknown as Row | undefined;
+      .get(match.to, match.subject, after) as unknown as Row | undefined;
     if (inOutbox) {
       this.moveTo(inOutbox.id, "__recalled");
       return { canceled: true, reason: "Recalled from outbox before delivery", id: inOutbox.id };
     }
     const delivered = this.db
       .prepare(
-        "SELECT * FROM messages WHERE folder = 'sent' AND to_addr = ? AND subject = ? ORDER BY ts DESC LIMIT 1",
+        "SELECT * FROM messages WHERE folder = 'sent' AND to_addr = ? AND subject = ? AND ts >= ? ORDER BY ts ASC LIMIT 1",
       )
-      .get(match.to, match.subject) as unknown as Row | undefined;
+      .get(match.to, match.subject, after) as unknown as Row | undefined;
     if (delivered) {
       return {
         canceled: false,
@@ -176,9 +186,9 @@ export class EmailStore {
     }
     const recalled = this.db
       .prepare(
-        "SELECT * FROM messages WHERE folder = '__recalled' AND to_addr = ? AND subject = ? ORDER BY ts DESC LIMIT 1",
+        "SELECT * FROM messages WHERE folder = '__recalled' AND to_addr = ? AND subject = ? AND ts >= ? ORDER BY ts ASC LIMIT 1",
       )
-      .get(match.to, match.subject) as unknown as Row | undefined;
+      .get(match.to, match.subject, after) as unknown as Row | undefined;
     if (recalled) {
       return { canceled: true, reason: "Already recalled", id: recalled.id };
     }

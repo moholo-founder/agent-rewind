@@ -26,10 +26,18 @@ export class SnapshotStore implements SnapshotStoreLike {
     const target = this.pathFor(ref);
     if (!fs.existsSync(target)) {
       fs.mkdirSync(path.dirname(target), { recursive: true });
-      // Write via temp file + rename so a crash can't leave a truncated blob
-      // that hashes to the wrong value.
+      // Write via temp file + fsync + rename: the dedup above trusts the
+      // file's existence, so the bytes must be durable before the name is —
+      // a crash-truncated blob under the right name would poison that
+      // content's undo forever.
       const tmp = `${target}.tmp-${process.pid}`;
-      fs.writeFileSync(tmp, content);
+      const fd = fs.openSync(tmp, "w");
+      try {
+        fs.writeSync(fd, content);
+        fs.fsyncSync(fd);
+      } finally {
+        fs.closeSync(fd);
+      }
       fs.renameSync(tmp, target);
     }
     this.journal.indexSnapshot({

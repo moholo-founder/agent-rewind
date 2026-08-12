@@ -133,9 +133,14 @@ export function createEmailMcpServer(
     "admin__cancel_send",
     {
       description: "ADMIN: recall a queued outbox message (undo of send).",
-      inputSchema: { to: z.string(), subject: z.string() },
+      inputSchema: {
+        to: z.string(),
+        subject: z.string(),
+        after: z.string().optional(),
+      },
     },
-    async ({ to, subject }) => ok(store.cancelSend({ to, subject })),
+    async ({ to, subject, after }) =>
+      ok(store.cancelSend({ to, subject, ...(after !== undefined ? { after } : {}) })),
   );
 
   server.registerTool(

@@ -24,7 +24,7 @@ import {
   createFilesystemConnector,
 } from "@agentrewind/connectors";
 import { AgentRewindRuntime, createProxyServer } from "@agentrewind/proxy";
-import { seedSandbox } from "./seed-files.js";
+import { seedDemoSandbox } from "@agentrewind/connectors";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "../../..");
@@ -39,7 +39,7 @@ const log = (msg: string) => console.error(`[agent-rewind] ${msg}`);
 
 async function main(): Promise<void> {
   if (!fs.existsSync(sandboxRoot)) {
-    seedSandbox(sandboxRoot);
+    seedDemoSandbox(sandboxRoot);
     log(`Seeded sandbox at ${sandboxRoot}`);
   }
 
@@ -86,8 +86,18 @@ async function main(): Promise<void> {
     runtime,
     fs.existsSync(webDist) ? { staticDir: webDist } : {},
   );
-  app.listen(port, "127.0.0.1", () => {
+  const httpServer = app.listen(port, "127.0.0.1", () => {
     log(`Timeline UI: http://localhost:${port}`);
+  });
+  httpServer.on("error", (err: NodeJS.ErrnoException) => {
+    // Fail loudly: pointing the operator at a URL served by a different
+    // runtime would wire STOP/Undo to the wrong journal.
+    console.error(
+      err.code === "EADDRINUSE"
+        ? `[agent-rewind] FATAL: port ${port} already in use (another instance?).`
+        : `[agent-rewind] FATAL: timeline server failed: ${err.message}`,
+    );
+    process.exit(1);
   });
 
   // Last: hand stdio to the MCP proxy. From here on, stdout is protocol.

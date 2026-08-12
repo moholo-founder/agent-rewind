@@ -235,3 +235,94 @@ describe("proxy end-to-end", () => {
     expect(fs.existsSync(path.join(root, "b.txt"))).toBe(false);
   });
 });
+
+describe("review regressions — enforcement path", () => {
+  it("journals a sandbox-escape attempt instead of throwing raw (probe guard)", async () => {
+    const result = await agent.callTool({
+      name: "delete_dir",
+      arguments: { path: ".." },
+    });
+    expect(result.isError).toBe(true);
+    expect(text(result)).toContain("blast-radius probe failed");
+
+    const entry = runtime.journal.list()[0]!;
+    expect(entry.tool).toBe("delete_dir");
+    expect(entry.status).toBe("rejected");
+    expect(entry.resultSummary).toMatch(/escapes the sandbox|probe failed/);
+  });
+
+  it("records intent (pending) BEFORE the side effect, then the outcome", async () => {
+    const events: { type: string; status?: string }[] = [];
+    runtime.events.on("timeline", (e: { type: string; action?: { status: string } }) => {
+      events.push({ type: e.type, ...(e.action ? { status: e.action.status } : {}) });
+    });
+    await agent.callTool({
+      name: "write_file",
+      arguments: { path: "intent.txt", content: "x" },
+    });
+    expect(events[0]).toEqual({ type: "action", status: "pending" });
+    expect(events[1]).toEqual({ type: "status", status: "executed" });
+  });
+
+  it("double-approve executes exactly once and never mis-journals (claim race)", async () => {
+    fs.mkdirSync(path.join(root, "race"));
+    for (let i = 0; i < 30; i++) fs.writeFileSync(path.join(root, "race", `${i}.txt`), "x");
+    await agent.callTool({ name: "delete_dir", arguments: { path: "race" } });
+    const held = runtime.journal.listHeld()[0]!;
+
+    const [a, b] = await Promise.allSettled([
+      runtime.approveHeld(held.id),
+      runtime.approveHeld(held.id),
+    ]);
+    const outcomes = [a, b];
+    expect(outcomes.filter((o) => o.status === "fulfilled")).toHaveLength(1);
+    expect(outcomes.filter((o) => o.status === "rejected")).toHaveLength(1);
+    // The loser must NOT have poisoned the journal: the row is executed.
+    expect(runtime.journal.get(held.id).status).toBe("executed");
+    expect(fs.existsSync(path.join(root, "race"))).toBe(false);
+    // And the executed action is still rewindable.
+    expect(
+      runtime.journal
+        .listRewindable(new Date(Date.now() - 60_000).toISOString())
+        .some((x) => x.id === held.id),
+    ).toBe(true);
+  });
+
+  it("rewind engages the kill switch for its duration", async () => {
+    const anchor = new Date(Date.now() - 10).toISOString();
+    await agent.callTool({
+      name: "write_file",
+      arguments: { path: "rw.txt", content: "x" },
+    });
+    const stopsSeen: boolean[] = [];
+    runtime.events.on("timeline", (e: { type: string; stopped?: boolean }) => {
+      if (e.type === "stop") stopsSeen.push(e.stopped!);
+    });
+    let stoppedDuringUndo = false;
+    const origUndo = runtime.undoAction.bind(runtime);
+    void origUndo;
+    const report = await (async () => {
+      // observe stop state from inside the rewind via onOutcome-adjacent
+      // signal: check isStopped when the first status event fires.
+      const p = runtime.rewind(anchor);
+      // isStopped flips synchronously inside rewind() before first await:
+      stoppedDuringUndo = runtime.isStopped();
+      return p;
+    })();
+    expect(report.fullyRestored).toBe(true);
+    expect(stoppedDuringUndo).toBe(true);
+    expect(runtime.isStopped()).toBe(false); // restored afterwards
+    expect(stopsSeen).toEqual([true, false]);
+  });
+
+  it("rewind with onlyActionIds undoes exactly the previewed set", async () => {
+    const anchor = new Date(Date.now() - 10).toISOString();
+    await agent.callTool({ name: "write_file", arguments: { path: "k1.txt", content: "1" } });
+    await agent.callTool({ name: "write_file", arguments: { path: "k2.txt", content: "2" } });
+    const [newer] = runtime.journal.listRewindable(anchor);
+    const report = await runtime.rewind(anchor, [newer!.id]);
+    expect(report.outcomes).toHaveLength(1);
+    expect(fs.existsSync(path.join(root, "k2.txt"))).toBe(false); // undone
+    expect(fs.existsSync(path.join(root, "k1.txt"))).toBe(true); // untouched
+  });
+});

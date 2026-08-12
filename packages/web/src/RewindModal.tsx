@@ -32,7 +32,9 @@ export function RewindModal({
     setRunning(true);
     setError(null);
     try {
-      const { report } = await api.rewind(anchor);
+      // Rewind exactly the previewed set: actions that executed between
+      // preview and confirm must not be silently swept in.
+      const { report } = await api.rewind(anchor, preview?.map((a) => a.id));
       setReport(report);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

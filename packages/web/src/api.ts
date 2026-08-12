@@ -6,8 +6,19 @@ import type {
 } from "./types";
 
 async function json<T>(res: Response): Promise<T> {
-  const body = (await res.json()) as T & { error?: string };
-  if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+  // Read as text first: a non-JSON error body (proxy page, stack trace)
+  // must surface as the HTTP failure it is, not a JSON parse error.
+  const text = await res.text();
+  let body: (T & { error?: string }) | null = null;
+  try {
+    body = JSON.parse(text) as T & { error?: string };
+  } catch {
+    /* not JSON */
+  }
+  if (!res.ok) {
+    throw new Error(body?.error ?? `HTTP ${res.status}: ${text.slice(0, 200)}`);
+  }
+  if (body === null) throw new Error(`Expected JSON, got: ${text.slice(0, 200)}`);
   return body;
 }
 
@@ -23,11 +34,11 @@ export const api = {
     fetch(`/api/rewind/preview?to=${encodeURIComponent(to)}`).then((r) =>
       json<{ actions: ActionRecord[] }>(r),
     ),
-  rewind: (toTimestamp: string) =>
+  rewind: (toTimestamp: string, actionIds?: string[]) =>
     fetch("/api/rewind", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ toTimestamp }),
+      body: JSON.stringify({ toTimestamp, ...(actionIds ? { actionIds } : {}) }),
     }).then((r) => json<{ report: RewindReport }>(r)),
   stop: () => fetch("/api/stop", { method: "POST" }).then((r) => json(r)),
   resume: () => fetch("/api/resume", { method: "POST" }).then((r) => json(r)),

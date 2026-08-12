@@ -181,3 +181,28 @@ describe("mock email connector", () => {
     expect(store.count("inbox")).toBe(10);
   });
 });
+
+describe("review regressions — email", () => {
+  it("two sends with identical to+subject each recall THEIR OWN message", async () => {
+    const { manifest } = createEmailConnector();
+    const cap = manifest.tools.send_message!.compensator!;
+    const argsA = { to: "dup@example.com", subject: "Same subject", body: "first" };
+    const argsB = { to: "dup@example.com", subject: "Same subject", body: "second" };
+
+    const refA = await cap.capture(argsA, ctx);
+    const sentA = store.send({ from: "agent@agent-rewind.local", deliveryWindowMs: WINDOW_MS, ...argsA });
+    await new Promise((r) => setTimeout(r, 5)); // distinct timestamps
+    const refB = await cap.capture(argsB, ctx);
+    const sentB = store.send({ from: "agent@agent-rewind.local", deliveryWindowMs: WINDOW_MS, ...argsB });
+
+    // Undo B first: must recall B (the later send), leaving A queued.
+    const undoB = await cap.undo(entryFor(refB, "send_message"), ctx);
+    expect(undoB.outcome).toBe("undone");
+    expect(store.get(sentB.id)!.folder).toBe("__recalled");
+    expect(store.get(sentA.id)!.folder).toBe("outbox");
+
+    const undoA = await cap.undo(entryFor(refA, "send_message"), ctx);
+    expect(undoA.outcome).toBe("undone");
+    expect(store.get(sentA.id)!.folder).toBe("__recalled");
+  });
+});

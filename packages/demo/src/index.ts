@@ -20,7 +20,7 @@ import {
   createFilesystemConnector,
 } from "@agentrewind/connectors";
 import { AgentRewindRuntime, createProxyServer } from "@agentrewind/proxy";
-import { seedSandbox } from "./seed-files.js";
+import { seedDemoSandbox } from "@agentrewind/connectors";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "../../..");
@@ -35,7 +35,7 @@ const agentSays = (msg: string) => console.log(`\x1b[33m[rogue-agent]\x1b[0m ${m
 async function main(): Promise<void> {
   // Fresh demo state on every run (demo-owned directory only).
   fs.rmSync(demoDir, { recursive: true, force: true });
-  seedSandbox(sandboxRoot);
+  seedDemoSandbox(sandboxRoot);
   log(`Sandbox seeded at ${sandboxRoot}`);
 
   const runtime = new AgentRewindRuntime({
@@ -90,10 +90,20 @@ async function main(): Promise<void> {
     runtime,
     fs.existsSync(webDist) ? { staticDir: webDist } : {},
   );
-  app.listen(PORT, "127.0.0.1", () => {
+  const httpServer = app.listen(PORT, "127.0.0.1", () => {
     log("");
     log(`▶▶▶  Timeline UI: \x1b[1mhttp://localhost:${PORT}\x1b[0m  ◀◀◀`);
     log("");
+  });
+  httpServer.on("error", (err: NodeJS.ErrnoException) => {
+    // Fail loudly: pointing the operator at a URL served by a different
+    // runtime would wire STOP/Undo to the wrong journal.
+    console.error(
+      err.code === "EADDRINUSE"
+        ? `[agent-rewind] FATAL: port ${PORT} already in use (another instance?).`
+        : `[agent-rewind] FATAL: timeline server failed: ${err.message}`,
+    );
+    process.exit(1);
   });
 
   const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));

@@ -22,7 +22,7 @@ please sort that out before submitting.
 
 ## Practical notes
 
-- Node 22.5+, pnpm 9+. `pnpm install && pnpm -r build && pnpm -r test`.
+- Node 22.13+, pnpm 9+. `pnpm install && pnpm -r build && pnpm -r test`.
 - Every compensator change needs a do→undo→assert-original round-trip test.
 - The journal is append-only and the redaction rule (no secrets in the
   journal) is non-negotiable — see README architecture rules.

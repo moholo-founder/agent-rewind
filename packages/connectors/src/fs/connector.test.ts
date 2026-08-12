@@ -230,3 +230,44 @@ describe("blast radius", () => {
     expect(radius).toBeGreaterThan(manifest.holdThreshold);
   });
 });
+
+describe("review regressions — sandbox & compensators", () => {
+  it("refuses a DANGLING symlink (existsSync would skip it)", (ctx) => {
+    const { sandbox } = createFilesystemConnector({ root });
+    try {
+      fs.symlinkSync(path.join(tmpDir, "does-not-exist-yet"), path.join(root, "dangler"));
+    } catch {
+      ctx.skip(); // no symlink privilege on this OS
+      return;
+    }
+    expect(() => sandbox.resolve("dangler")).toThrow(SandboxViolation);
+    expect(() => sandbox.resolve("dangler/child.txt")).toThrow(SandboxViolation);
+    // The escape the dangling link enabled: writing through it would land
+    // outside the sandbox once the target springs into existence.
+    expect(() => ops.writeFile(sandbox, "dangler", "payload")).toThrow(SandboxViolation);
+  });
+
+  it("delete_file of a symlink → undo restores the LINK, not a copied file", async (ctx) => {
+    const { manifest, sandbox } = createFilesystemConnector({ root });
+    fs.writeFileSync(path.join(root, "target.txt"), "target content");
+    try {
+      fs.symlinkSync("target.txt", path.join(root, "alias"));
+    } catch {
+      ctx.skip();
+      return;
+    }
+    const cap = manifest.tools.delete_file!.compensator!;
+    const ref = await cap.capture({ path: "alias" }, ctx2());
+    ops.deleteFile(sandbox, "alias");
+    expect(fs.existsSync(path.join(root, "alias"))).toBe(false);
+
+    const result = await cap.undo(entryFor(ref, "delete_file"), ctx2());
+    expect(result.outcome).toBe("undone");
+    expect(fs.lstatSync(path.join(root, "alias")).isSymbolicLink()).toBe(true);
+    expect(fs.readlinkSync(path.join(root, "alias"))).toBe("target.txt");
+  });
+});
+
+function ctx2() {
+  return ctx;
+}

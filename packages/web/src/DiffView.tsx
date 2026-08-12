@@ -24,13 +24,18 @@ export function DiffView({ detail }: { detail: ActionDetail }) {
         const after = String(
           (action.argsRedacted as { content?: unknown })?.content ?? "",
         );
+        // A brand-new file has no "before" — render pure additions instead
+        // of a phantom removed empty line.
+        const lines = preState.present
+          ? diffLines(before, after)
+          : after.split("\n").map((text) => ({ kind: "added" as const, text }));
         return (
           <>
             <div className="diff-title">
               {preState.present ? "content diff (before → after)" : "new file content"}
             </div>
             <div className="diff">
-              {diffLines(before, after).map((l, i) => (
+              {lines.map((l, i) => (
                 <div key={i} className={`line ${l.kind}`}>
                   {l.text}
                 </div>

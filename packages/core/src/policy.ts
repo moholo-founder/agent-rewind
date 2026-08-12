@@ -36,6 +36,16 @@ export function gate(params: {
     };
   }
 
+  // A malformed radius (NaN/Infinity from a broken downstream count) must
+  // fail CLOSED: `NaN > threshold` is false, which would sail a
+  // delete-everything through as "execute" if we only kept the > check.
+  if (!Number.isFinite(blastRadius) || blastRadius < 0) {
+    return {
+      verdict: "hold",
+      reason: `Blast radius could not be determined (${blastRadius}) — held for human approval.`,
+    };
+  }
+
   if (blastRadius > manifest.holdThreshold) {
     return {
       verdict: "hold",

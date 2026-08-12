@@ -22,8 +22,11 @@ import type {
  */
 
 const VALID_TRANSITIONS: Record<ActionStatus, ActionStatus[]> = {
-  pending: ["executed", "failed", "held", "blocked-by-stop"],
-  held: ["executed", "failed", "rejected"],
+  // pending → rejected covers a claimed approval whose args were lost.
+  pending: ["executed", "failed", "held", "blocked-by-stop", "rejected"],
+  // held → pending is the atomic "claim" an approval takes before its first
+  // await, so a concurrent second approval sees pending and is refused.
+  held: ["pending", "executed", "failed", "rejected"],
   executed: ["undone", "undo-failed"],
   // undo is idempotent; a failed undo may be retried and succeed.
   "undo-failed": ["undone", "undo-failed"],
@@ -94,13 +97,16 @@ export class Journal {
     this.db = new DatabaseSync(dbPath);
     this.db.exec("PRAGMA journal_mode = WAL");
     this.db.exec("PRAGMA foreign_keys = ON");
+    // Two runtimes pointing at the same journal (the default CLI path makes
+    // this easy) must queue, not throw "database is locked".
+    this.db.exec("PRAGMA busy_timeout = 5000");
     this.migrate();
   }
 
   private migrate(): void {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS actions (
-        id TEXT PRIMARY KEY,
+        id TEXT PRIMARY KEY NOT NULL,
         ts TEXT NOT NULL,
         executed_ts TEXT,
         session_id TEXT NOT NULL,
@@ -142,24 +148,33 @@ export class Journal {
 
       -- Append-only enforcement. The journal is evidence; history cannot be
       -- deleted, and an action's identity cannot be rewritten after the fact.
+      -- Comparisons use IS NOT (never !=): with != a NULL on either side makes
+      -- the WHEN clause NULL, the trigger silently skips, and identity could
+      -- be destroyed via e.g. "SET id = NULL".
+      DROP TRIGGER IF EXISTS actions_immutable_identity;
+
       CREATE TRIGGER IF NOT EXISTS actions_no_delete
         BEFORE DELETE ON actions
         BEGIN SELECT RAISE(ABORT, 'journal is append-only: DELETE forbidden'); END;
 
-      CREATE TRIGGER IF NOT EXISTS actions_immutable_identity
+      CREATE TRIGGER actions_immutable_identity
         BEFORE UPDATE ON actions
-        WHEN NEW.id != OLD.id
-          OR NEW.ts != OLD.ts
-          OR NEW.session_id != OLD.session_id
-          OR NEW.connector != OLD.connector
-          OR NEW.tool != OLD.tool
-          OR NEW.args_redacted != OLD.args_redacted
-          OR NEW.class != OLD.class
-          OR COALESCE(NEW.caused_by, '') != COALESCE(OLD.caused_by, '')
+        WHEN NEW.id IS NOT OLD.id
+          OR NEW.ts IS NOT OLD.ts
+          OR NEW.session_id IS NOT OLD.session_id
+          OR NEW.connector IS NOT OLD.connector
+          OR NEW.tool IS NOT OLD.tool
+          OR NEW.args_redacted IS NOT OLD.args_redacted
+          OR NEW.class IS NOT OLD.class
+          OR NEW.caused_by IS NOT OLD.caused_by
         BEGIN SELECT RAISE(ABORT, 'journal is append-only: identity columns are immutable'); END;
 
       CREATE TRIGGER IF NOT EXISTS rewind_no_delete
         BEFORE DELETE ON rewind_sessions
+        BEGIN SELECT RAISE(ABORT, 'rewind sessions are append-only'); END;
+
+      CREATE TRIGGER IF NOT EXISTS rewind_no_update
+        BEFORE UPDATE ON rewind_sessions
         BEGIN SELECT RAISE(ABORT, 'rewind sessions are append-only'); END;
     `);
   }
@@ -225,7 +240,10 @@ export class Journal {
         `Illegal status transition ${current.status} -> ${to} for action ${id}`,
       );
     }
-    this.db
+    // The WHERE clause re-checks the status we validated against, closing the
+    // check-then-act gap: if another writer transitioned the row in between,
+    // this UPDATE matches nothing and we refuse instead of clobbering.
+    const result = this.db
       .prepare(
         `UPDATE actions SET
            status = ?,
@@ -233,7 +251,7 @@ export class Journal {
            pre_state_ref = COALESCE(?, pre_state_ref),
            result_summary = COALESCE(?, result_summary),
            blast_radius = COALESCE(?, blast_radius)
-         WHERE id = ?`,
+         WHERE id = ? AND status = ?`,
       )
       .run(
         to,
@@ -242,7 +260,14 @@ export class Journal {
         patch.resultSummary ?? null,
         patch.blastRadius ?? null,
         id,
+        current.status,
       );
+    if (result.changes !== 1) {
+      const now = this.get(id);
+      throw new Error(
+        `Concurrent status change: expected ${current.status}, found ${now.status} for action ${id}`,
+      );
+    }
     return this.get(id);
   }
 

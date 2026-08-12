@@ -85,6 +85,12 @@ export class AgentRewindRuntime {
     const reg: ConnectorRegistration = { manifest, client, tools };
     this.connectors.set(manifest.connector, reg);
     for (const t of listed.tools) {
+      // Admin (compensator-only) tools get NO route at all — not merely a
+      // hidden listing. With a route they would land in the held queue and a
+      // single operator Approve would execute the surface the agent is never
+      // supposed to reach. Compensators call downstream via the client
+      // directly, so they don't need routes.
+      if (adminPrefix && t.name.startsWith(adminPrefix)) continue;
       if (this.routes.has(t.name)) {
         throw new Error(
           `Tool name collision: "${t.name}" is exposed by two connectors`,
@@ -148,28 +154,69 @@ export class AgentRewindRuntime {
     const { manifest } = route.connector;
     const cap = route.capability;
     const toolClass = cap?.class ?? "unknown";
-    const blastRadius = cap?.blastRadius
-      ? await cap.blastRadius(args, this.contextFor(route.connector))
-      : 1;
     const riskScore = cap?.riskScore ?? defaultRiskScore(toolClass);
-    const summary = cap?.summarize?.(args) ?? `${manifest.connector}.${tool}`;
+    let summary: string;
+    try {
+      summary = cap?.summarize?.(args) ?? `${manifest.connector}.${tool}`;
+    } catch {
+      summary = `${manifest.connector}.${tool}`;
+    }
     const argsRedacted = redactArgs(args, cap?.redactFields ?? []);
+    const stopped = this.journal.isStopped();
+
+    // Blast-radius probe. Two rules learned the hard way:
+    //  1. Never probe while STOPPED — the probe itself can be a downstream
+    //     call, and the kill switch means NO side channels.
+    //  2. A probe failure must be journaled and refused, not thrown raw: a
+    //     sandbox-escape attempt (delete_dir "..") throws exactly here, and
+    //     the flight recorder must capture exactly that.
+    let blastRadius = 1;
+    if (cap?.blastRadius && toolClass !== "read" && !stopped) {
+      try {
+        blastRadius = Number(
+          await cap.blastRadius(args, this.contextFor(route.connector)),
+        );
+      } catch (err) {
+        const detail = `Refused before execution: blast-radius probe failed — ${err instanceof Error ? err.message : String(err)}`;
+        const action = this.journal.record({
+          sessionId: this.sessionId,
+          connector: manifest.connector,
+          tool,
+          argsRedacted,
+          class: toolClass,
+          riskScore,
+          blastRadius: 0,
+          status: "rejected",
+          resultSummary: `${summary} — ${detail}`,
+        });
+        this.emit({ type: "action", action });
+        return { action, isError: true, content: [{ type: "text", text: detail }] };
+      }
+    }
 
     const decision = gate({
       manifest,
       tool,
       toolClass,
       blastRadius,
-      stopped: this.journal.isStopped(),
+      stopped,
     });
 
     switch (decision.verdict) {
       case "pass-read": {
-        // Pure pass-through: no gating, no snapshot. Journal after the fact.
-        const result = await route.connector.client.callTool({
-          name: tool,
-          arguments: args,
-        });
+        // Pure pass-through: no gating, no snapshot. Journal after the fact —
+        // including transport failures, so "every action is journaled" holds
+        // even when the downstream child is dead.
+        let result: Awaited<ReturnType<Client["callTool"]>>;
+        try {
+          result = await route.connector.client.callTool({
+            name: tool,
+            arguments: args,
+          });
+        } catch (err) {
+          const detail = err instanceof Error ? err.message : String(err);
+          result = { content: [{ type: "text", text: detail }], isError: true };
+        }
         const action = this.journal.record({
           sessionId: this.sessionId,
           connector: manifest.connector,
@@ -288,6 +335,27 @@ export class AgentRewindRuntime {
     const { manifest } = route.connector;
     const ctx = this.contextFor(route.connector);
 
+    // 0. Record INTENT before any side effect. If we crash between the
+    //    downstream call and its bookkeeping, the journal shows a pending
+    //    destructive action instead of showing nothing at all — an executed
+    //    action with zero journal trace would be invisible to Rewind forever.
+    const actionId =
+      existingActionId ??
+      this.journal.record({
+        sessionId: this.sessionId,
+        connector: manifest.connector,
+        tool,
+        argsRedacted: meta.argsRedacted,
+        class: meta.toolClass,
+        riskScore: meta.riskScore,
+        blastRadius: meta.blastRadius,
+        status: "pending",
+        resultSummary: `${meta.summary} — pending`,
+      }).id;
+    if (!existingActionId) {
+      this.emit({ type: "action", action: this.journal.get(actionId) });
+    }
+
     // 1. Capture pre-state BEFORE executing. If capture fails we do not
     //    execute: an action we can't undo must not run silently.
     let preStateRef: string | null = null;
@@ -296,20 +364,10 @@ export class AgentRewindRuntime {
         preStateRef = await route.capability.compensator.capture(args, ctx);
       } catch (err) {
         const detail = `Pre-state capture failed, action refused: ${err instanceof Error ? err.message : String(err)}`;
-        const action = existingActionId
-          ? this.journal.transition(existingActionId, "failed", { resultSummary: detail })
-          : this.journal.record({
-              sessionId: this.sessionId,
-              connector: manifest.connector,
-              tool,
-              argsRedacted: meta.argsRedacted,
-              class: meta.toolClass,
-              riskScore: meta.riskScore,
-              blastRadius: meta.blastRadius,
-              status: "failed",
-              resultSummary: detail,
-            });
-        this.emit({ type: existingActionId ? "status" : "action", action });
+        const action = this.journal.transition(actionId, "failed", {
+          resultSummary: `${meta.summary} — ${detail}`,
+        });
+        this.emit({ type: "status", action });
         return { action, isError: true, content: [{ type: "text", text: detail }] };
       }
     }
@@ -329,29 +387,15 @@ export class AgentRewindRuntime {
       result = { content: [{ type: "text", text: failure }], isError: true };
     }
 
-    // 3. Journal.
+    // 3. Journal the outcome (the intent row already exists).
     const executedTs = new Date().toISOString();
     const summaryText = failure ? `${meta.summary} — FAILED: ${failure}` : meta.summary;
-    const action = existingActionId
-      ? this.journal.transition(existingActionId, failure ? "failed" : "executed", {
-          executedTs,
-          preStateRef,
-          resultSummary: summaryText,
-        })
-      : this.journal.record({
-          sessionId: this.sessionId,
-          connector: manifest.connector,
-          tool,
-          argsRedacted: meta.argsRedacted,
-          class: meta.toolClass,
-          riskScore: meta.riskScore,
-          blastRadius: meta.blastRadius,
-          status: failure ? "failed" : "executed",
-          executedTs,
-          preStateRef,
-          resultSummary: summaryText,
-        });
-    this.emit({ type: existingActionId ? "status" : "action", action });
+    const action = this.journal.transition(actionId, failure ? "failed" : "executed", {
+      executedTs,
+      preStateRef,
+      resultSummary: summaryText,
+    });
+    this.emit({ type: "status", action });
 
     return {
       action,
@@ -364,13 +408,25 @@ export class AgentRewindRuntime {
 
   async approveHeld(actionId: string): Promise<ToolCallOutcome> {
     const action = this.journal.get(actionId);
-    if (action.status !== "held") {
-      throw new Error(`Action ${actionId} is not held (status: ${action.status})`);
-    }
-    // STOP also vetoes approvals: an operator must resume first.
+    // STOP also vetoes approvals: an operator must resume first. Checked
+    // before claiming so the row stays held (approvable after resume).
     if (this.journal.isStopped()) {
       throw new Error("Kill switch is engaged; resume before approving actions.");
     }
+    // Atomically CLAIM the action (held → pending) before the first await.
+    // The transition's status-guarded UPDATE makes a concurrent second
+    // approval (or a reject) lose cleanly here instead of double-executing
+    // or mis-journaling an executed action as rejected.
+    let claimed: ActionRecord;
+    try {
+      claimed = this.journal.transition(actionId, "pending");
+    } catch {
+      throw new Error(
+        `Action ${actionId} is not held (status: ${this.journal.get(actionId).status})`,
+      );
+    }
+    this.emit({ type: "status", action: claimed });
+
     const args = this.pendingArgs.get(actionId);
     if (!args) {
       const failed = this.journal.transition(actionId, "rejected", {
@@ -380,7 +436,13 @@ export class AgentRewindRuntime {
       throw new Error("Original arguments no longer available; action rejected.");
     }
     const route = this.routes.get(action.tool);
-    if (!route) throw new Error(`No route for tool ${action.tool}`);
+    if (!route) {
+      const failed = this.journal.transition(actionId, "rejected", {
+        resultSummary: `${action.resultSummary ?? action.tool} — no route for this tool; rejected.`,
+      });
+      this.emit({ type: "status", action: failed });
+      throw new Error(`No route for tool ${action.tool}`);
+    }
     this.pendingArgs.delete(actionId);
     return this.captureAndExecute(
       route,
@@ -474,26 +536,54 @@ export class AgentRewindRuntime {
     });
     this.emit({ type: "action", action: comp });
     if (result.outcome !== "not-reversible") {
-      const updated = this.journal.transition(
-        action.id,
-        undoOk ? "undone" : "undo-failed",
-        { resultSummary: result.detail },
-      );
-      this.emit({ type: "status", action: updated });
+      try {
+        const updated = this.journal.transition(
+          action.id,
+          undoOk ? "undone" : "undo-failed",
+          { resultSummary: result.detail },
+        );
+        this.emit({ type: "status", action: updated });
+      } catch {
+        // Raced by a concurrent rewind/undo. If the row already carries the
+        // status we wanted, the world and journal agree — nothing to do.
+        const now = this.journal.get(action.id);
+        this.emit({ type: "status", action: now });
+        if (now.status !== (undoOk ? "undone" : "undo-failed")) {
+          return {
+            outcome: "partial",
+            detail: `${result.detail} — but the journal row changed concurrently (now ${now.status})`,
+          };
+        }
+      }
     }
     return result;
   }
 
-  /** Rewind: undo everything executed after the anchor, LIFO. */
-  async rewind(anchorIso: string): Promise<RewindReport> {
-    const report = await executeRewind({
-      journal: this.journal,
-      anchorIso,
-      runUndo: (action) => this.performUndo(action),
-      onOutcome: (action) => this.emit({ type: "status", action }),
-    });
-    this.emit({ type: "rewind", rewind: report });
-    return report;
+  /**
+   * Rewind: undo everything executed after the anchor (or exactly the
+   * previewed set when `onlyActionIds` is given), LIFO.
+   *
+   * The kill switch is engaged for the duration: an agent acting mid-rewind
+   * would otherwise have its fresh writes clobbered by pre-plan snapshot
+   * restores while the report claims full restoration. If the operator had
+   * already stopped, we leave the switch tripped afterwards.
+   */
+  async rewind(anchorIso: string, onlyActionIds?: readonly string[]): Promise<RewindReport> {
+    const wasStopped = this.isStopped();
+    if (!wasStopped) this.stop();
+    try {
+      const report = await executeRewind({
+        journal: this.journal,
+        anchorIso,
+        runUndo: (action) => this.performUndo(action),
+        ...(onlyActionIds ? { onlyActionIds } : {}),
+        onOutcome: (action) => this.emit({ type: "status", action }),
+      });
+      this.emit({ type: "rewind", rewind: report });
+      return report;
+    } finally {
+      if (!wasStopped) this.resume();
+    }
   }
 
   async close(): Promise<void> {

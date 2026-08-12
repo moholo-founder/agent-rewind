@@ -208,7 +208,12 @@ describe("redaction", () => {
     expect(JSON.stringify(out)).not.toContain("sk-super-secret-value");
     expect(JSON.stringify(out)).not.toContain("abc123");
     expect((out.apiKey as { __redacted: boolean }).__redacted).toBe(true);
-    expect((out.apiKey as { length: number }).length).toBe(21);
+    // Keyed HMAC + bucketed length: nothing dictionary-recoverable, but the
+    // same secret still correlates within a runtime's lifetime.
+    expect((out.apiKey as { hmac: string }).hmac).toMatch(/^[0-9a-f]{16}$/);
+    expect((out.apiKey as { length: string }).length).toBe("16-31");
+    const again = redactArgs({ apiKey: "sk-super-secret-value" }) as Record<string, unknown>;
+    expect((again.apiKey as { hmac: string }).hmac).toBe((out.apiKey as { hmac: string }).hmac);
     expect(((out.nested as Record<string, unknown>).count)).toBe(3);
   });
 
@@ -270,5 +275,78 @@ describe("rewind engine", () => {
     });
     expect(second.outcomes).toHaveLength(0);
     expect(second.fullyRestored).toBe(false);
+  });
+});
+
+describe("review regressions — core", () => {
+  it("refuses NULL-id identity destruction (IS NOT trigger semantics)", () => {
+    const rec = journal.record(sampleAction());
+    const db = (journal as unknown as { db: import("node:sqlite").DatabaseSync }).db;
+    expect(() =>
+      db.prepare("UPDATE actions SET id = NULL WHERE id = ?").run(rec.id),
+    ).toThrow(/append-only/);
+    expect(journal.get(rec.id).id).toBe(rec.id);
+  });
+
+  it("rewind_sessions refuses UPDATE as well as DELETE", () => {
+    journal.recordRewind({
+      rewindId: "rw-upd",
+      anchor: "2026-08-12T00:00:00.000Z",
+      startedTs: "2026-08-12T00:01:00.000Z",
+      finishedTs: "2026-08-12T00:01:01.000Z",
+      outcomes: [],
+      fullyRestored: true,
+    });
+    const db = (journal as unknown as { db: import("node:sqlite").DatabaseSync }).db;
+    expect(() =>
+      db.prepare("UPDATE rewind_sessions SET report = '{}' WHERE id = 'rw-upd'").run(),
+    ).toThrow(/append-only/);
+  });
+
+  it("gate fails closed on a non-finite blast radius", () => {
+    const manifest: CapabilityManifest = {
+      connector: "filesystem",
+      holdThreshold: 25,
+      tools: { delete_dir: { class: "destructive" } },
+    };
+    for (const radius of [NaN, Infinity, -1]) {
+      expect(
+        gate({ manifest, tool: "delete_dir", toolClass: "destructive", blastRadius: radius, stopped: false })
+          .verdict,
+      ).toBe("hold");
+    }
+  });
+
+  it("rewind honors onlyActionIds and reports already-undone rows honestly", async () => {
+    const anchor = new Date(Date.now() - 60_000).toISOString();
+    const a = journal.record(sampleAction({ tool: "one" }));
+    const b = journal.record(sampleAction({ tool: "two" }));
+    const c = journal.record(sampleAction({ tool: "three" }));
+    for (const [i, rec] of [a, b, c].entries()) {
+      journal.transition(rec.id, "executed", {
+        executedTs: new Date(Date.now() - 3000 + i * 1000).toISOString(),
+      });
+    }
+    const ran: string[] = [];
+    const report = await executeRewind({
+      journal,
+      anchorIso: anchor,
+      onlyActionIds: [a.id, c.id], // operator previewed only these
+      runUndo: async (action) => {
+        ran.push(action.tool);
+        if (action.id === c.id) {
+          // Simulate a concurrent single-undo of `a` landing mid-rewind:
+          // the engine must re-fetch and skip it, not re-run its undo.
+          journal.transition(a.id, "undone");
+        }
+        return { outcome: "undone", detail: "ok" };
+      },
+    });
+
+    expect(ran).toEqual(["three"]); // LIFO: c first; a skipped; b excluded
+    expect(report.outcomes).toHaveLength(2);
+    expect(report.outcomes.find((o) => o.actionId === a.id)?.detail).toMatch(/Already undone/);
+    expect(report.fullyRestored).toBe(true); // both truthfully undone
+    expect(journal.get(b.id).status).toBe("executed"); // untouched
   });
 });

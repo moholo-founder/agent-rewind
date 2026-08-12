@@ -4,7 +4,7 @@
   "private": true,
   "description": "Flight recorder + undo button for AI agents: an MCP interception proxy with journaling, snapshots, policy gating, kill switch, and rewind.",
   "engines": {
-    "node": ">=22.5"
+    "node": ">=22.13"
   },
   "scripts": {
     "build": "pnpm -r build",

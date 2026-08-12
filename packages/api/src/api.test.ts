@@ -228,3 +228,42 @@ describe("API", () => {
     expect((await api("/api/rewind", { method: "POST", body: "{}" })).status).toBe(400);
   });
 });
+
+describe("review regressions — API & admin surface", () => {
+  it("admin__ tools are unreachable for the agent — refused, never held", async () => {
+    const result = await agent.callTool({
+      name: "admin__restore_message",
+      arguments: { id: "x", folder: "inbox" },
+    });
+    expect(result.isError).toBe(true);
+    const entry = runtime.journal.list()[0]!;
+    expect(entry.status).toBe("rejected"); // NOT "held" — no approve path exists
+    expect(runtime.journal.listHeld()).toHaveLength(0);
+  });
+
+  it("rejects non-ISO toTimestamp instead of rewinding all history", async () => {
+    for (const bad of [1, "1", true, "not-a-date", null]) {
+      const res = await api("/api/rewind", {
+        method: "POST",
+        body: JSON.stringify({ toTimestamp: bad }),
+      });
+      expect(res.status).toBe(400);
+    }
+    const preview = await api("/api/rewind/preview?to=1");
+    expect(preview.status).toBe(400);
+  });
+
+  it("rejects malformed actionIds", async () => {
+    const res = await api("/api/rewind", {
+      method: "POST",
+      body: JSON.stringify({ toTimestamp: new Date().toISOString(), actionIds: [1, 2] }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("clamps a hostile limit instead of 500ing or uncapping", async () => {
+    expect((await api("/api/timeline?limit=abc")).status).toBe(200);
+    expect((await api("/api/timeline?limit=-1")).status).toBe(200);
+    expect((await api("/api/timeline?limit=999999999")).status).toBe(200);
+  });
+});

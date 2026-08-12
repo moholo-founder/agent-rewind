@@ -34,4 +34,9 @@ if (!fs.existsSync(webSrc)) {
   process.exit(1);
 }
 fs.cpSync(webSrc, webDest, { recursive: true });
-console.log("bundled dist/cli.js + web UI");
+
+// The package README is gitignored (it's a copy) but MUST ship in the
+// tarball — npm's files array lists it, and without this copy the npx
+// package publishes with a blank landing page.
+fs.copyFileSync(path.join(here, "../../README.md"), path.join(here, "README.md"));
+console.log("bundled dist/cli.js + web UI + README");

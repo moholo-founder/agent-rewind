@@ -8,7 +8,21 @@
  *  - per-tool `redactFields` from the capability manifest for anything
  *    connector-specific (e.g. a real email body that could carry secrets).
  */
-import { createHash } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
+
+// Per-process random key: redacted values are HMAC'd, not plain-hashed, so
+// the journal never contains anything dictionary-recoverable. Correlation
+// ("same secret used twice") still works within one runtime's lifetime,
+// which is all the timeline needs.
+const REDACTION_KEY = randomBytes(32);
+
+function lengthBucket(n: number): string {
+  if (n < 8) return "<8";
+  if (n < 16) return "8-15";
+  if (n < 32) return "16-31";
+  if (n < 64) return "32-63";
+  return ">=64";
+}
 
 const GLOBAL_DENYLIST = [
   "password",
@@ -40,8 +54,8 @@ function redactValue(value: unknown): unknown {
   if (typeof value === "string") {
     return {
       __redacted: true,
-      sha256: createHash("sha256").update(value).digest("hex").slice(0, 16),
-      length: value.length,
+      hmac: createHmac("sha256", REDACTION_KEY).update(value).digest("hex").slice(0, 16),
+      length: lengthBucket(value.length),
     };
   }
   return { __redacted: true, type: typeof value };

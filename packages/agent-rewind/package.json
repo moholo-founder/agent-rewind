@@ -2,7 +2,14 @@
   "name": "agent-rewind",
   "version": "0.1.0",
   "description": "Flight recorder + undo button for AI agents. MCP interception proxy: journals every tool call, snapshots state before destructive actions, holds oversized ones for approval, and gives operators per-action Undo, Rewind-to-T, and a kill switch.",
-  "keywords": ["mcp", "model-context-protocol", "ai-agents", "safety", "undo", "audit"],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai-agents",
+    "safety",
+    "undo",
+    "audit"
+  ],
   "license": "BUSL-1.1",
   "repository": {
     "type": "git",
@@ -12,9 +19,13 @@
   "bin": {
     "agent-rewind": "dist/cli.js"
   },
-  "files": ["dist", "web", "README.md"],
+  "files": [
+    "dist",
+    "web",
+    "README.md"
+  ],
   "engines": {
-    "node": ">=22.5"
+    "node": ">=22.13"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -26,6 +37,7 @@
     "@agentrewind/connectors": "workspace:^",
     "@agentrewind/core": "workspace:^",
     "@agentrewind/proxy": "workspace:^",
+    "@agentrewind/web": "workspace:^",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/node": "^22",
     "esbuild": "^0.25.0",

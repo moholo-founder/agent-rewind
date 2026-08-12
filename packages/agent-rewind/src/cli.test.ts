@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { seedSandbox } from "./seed.js";
+import { seedDemoSandbox } from "@agentrewind/connectors";
 
 let tmpDir: string;
 
@@ -16,7 +16,7 @@ afterEach(() => {
 
 describe("agent-rewind package", () => {
   it("seeds the default demo sandbox", () => {
-    seedSandbox(tmpDir);
+    seedDemoSandbox(tmpDir);
     expect(fs.readdirSync(path.join(tmpDir, "quarterly-reports"))).toHaveLength(40);
   });
 });

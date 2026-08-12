@@ -34,7 +34,10 @@ export function createApiServer(
   });
 
   app.get("/api/timeline", (req, res) => {
-    const limit = req.query.limit ? Number(req.query.limit) : 500;
+    // Clamp untrusted input: a non-numeric limit must not reach SQL, and a
+    // negative one must not disable the row cap.
+    const raw = Number(req.query.limit);
+    const limit = Number.isInteger(raw) ? Math.min(Math.max(raw, 1), 10_000) : 500;
     res.json({
       stopped: runtime.isStopped(),
       actions: runtime.journal.list({ limit }),
@@ -97,21 +100,36 @@ export function createApiServer(
   });
 
   app.get("/api/rewind/preview", (req, res) => {
-    const to = String(req.query.to ?? "");
+    const to = parseIsoTimestamp(req.query.to);
     if (!to) {
-      res.status(400).json({ error: "Missing ?to=<ISO timestamp>" });
+      res.status(400).json({ error: "?to must be an ISO-8601 timestamp" });
       return;
     }
     res.json({ actions: runtime.journal.listRewindable(to) });
   });
 
   app.post("/api/rewind", async (req, res) => {
-    const to = (req.body as { toTimestamp?: string }).toTimestamp;
+    const body = req.body as { toTimestamp?: unknown; actionIds?: unknown };
+    // Strict validation: under SQLite affinity a sloppy value like the
+    // number 1 compares as less-than every ISO string, silently turning a
+    // bounded rewind into an undo of the entire history.
+    const to = parseIsoTimestamp(body.toTimestamp);
     if (!to) {
-      res.status(400).json({ error: "Body must include toTimestamp (ISO)" });
+      res.status(400).json({ error: "toTimestamp must be an ISO-8601 timestamp string" });
       return;
     }
-    const report = await runtime.rewind(to);
+    let actionIds: string[] | undefined;
+    if (body.actionIds !== undefined) {
+      if (
+        !Array.isArray(body.actionIds) ||
+        !body.actionIds.every((x) => typeof x === "string")
+      ) {
+        res.status(400).json({ error: "actionIds must be an array of strings" });
+        return;
+      }
+      actionIds = body.actionIds as string[];
+    }
+    const report = await runtime.rewind(to, actionIds);
     res.json({ report });
   });
 
@@ -156,6 +174,15 @@ export function createApiServer(
   }
 
   return app;
+}
+
+/** Accept only real ISO-8601 timestamp strings (see rewind validation). */
+function parseIsoTimestamp(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/.test(value)) {
+    return null;
+  }
+  return Number.isFinite(Date.parse(value)) ? value : null;
 }
 
 /**

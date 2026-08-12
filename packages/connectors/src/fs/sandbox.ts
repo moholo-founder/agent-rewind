@@ -48,10 +48,38 @@ export class Sandbox {
       );
     }
 
-    // Physical check: realpath the deepest existing ancestor. If any
-    // component is a symlink pointing outside the root, refuse.
+    // Physical check: walk up to the deepest lstat-existing ancestor.
+    // lstat (not exists/stat) is load-bearing: existsSync FOLLOWS symlinks
+    // and reports false for a dangling link, which would skip the link
+    // entirely and let a later write land wherever the link points.
     let probe = resolved;
-    while (!fs.existsSync(probe)) {
+    for (;;) {
+      let st: fs.Stats | null = null;
+      try {
+        st = fs.lstatSync(probe);
+      } catch {
+        /* does not exist at this level */
+      }
+      if (st) {
+        if (st.isSymbolicLink()) {
+          // A symlink on the path must physically resolve inside the root;
+          // a dangling link has no realpath and is refused outright.
+          let physical: string;
+          try {
+            physical = fs.realpathSync(probe);
+          } catch {
+            throw new SandboxViolation(
+              `Path traverses a dangling symlink: ${relative}`,
+            );
+          }
+          if (physical !== this.root && !physical.startsWith(this.root + path.sep)) {
+            throw new SandboxViolation(
+              `Path resolves outside the sandbox via symlink: ${relative}`,
+            );
+          }
+        }
+        break;
+      }
       const parent = path.dirname(probe);
       if (parent === probe) break;
       probe = parent;

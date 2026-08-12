@@ -23,6 +23,8 @@ interface FilePreState {
   rel: string;
   present: boolean;
   contentRef?: string;
+  /** Set when the pre-state was a symlink: undo recreates the link itself. */
+  symlinkTarget?: string;
 }
 
 interface MovePreState {
@@ -51,6 +53,16 @@ function str(args: Record<string, unknown>, key: string): string {
   const v = args[key];
   if (typeof v !== "string") throw new Error(`Missing string arg "${key}"`);
   return v;
+}
+
+/** True if the path exists as a directory entry, even as a dangling symlink. */
+function isLstatable(p: string): boolean {
+  try {
+    fs.lstatSync(p);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function captureTree(
@@ -128,6 +140,12 @@ function restoreFile(
   ctx: CompensatorContext,
 ): UndoResult {
   const abs = sandbox.resolve(pre.rel);
+  if (pre.present && pre.symlinkTarget !== undefined) {
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    if (fs.existsSync(abs) || isLstatable(abs)) fs.rmSync(abs);
+    fs.symlinkSync(pre.symlinkTarget, abs);
+    return { outcome: "undone", detail: `Restored symlink ${pre.rel}` };
+  }
   if (pre.present) {
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     fs.writeFileSync(abs, ctx.snapshots.getBlob(pre.contentRef ?? ""));
@@ -217,12 +235,15 @@ export function createFilesystemConnector(options: {
   const deleteFileCompensator: Compensator = {
     async capture(args, ctx) {
       const rel = str(args, "path");
-      const pre: FilePreState = {
-        kind: "file",
-        rel,
-        present: true,
-        contentRef: ctx.snapshots.putBlob(fs.readFileSync(sandbox.resolve(rel))),
-      };
+      const abs = sandbox.resolve(rel);
+      const pre: FilePreState = fs.lstatSync(abs).isSymbolicLink()
+        ? { kind: "file", rel, present: true, symlinkTarget: fs.readlinkSync(abs) }
+        : {
+            kind: "file",
+            rel,
+            present: true,
+            contentRef: ctx.snapshots.putBlob(fs.readFileSync(abs)),
+          };
       return ctx.snapshots.putRecord(pre, { connector: "filesystem", tool: "delete_file" });
     },
     async undo(entry, ctx) {

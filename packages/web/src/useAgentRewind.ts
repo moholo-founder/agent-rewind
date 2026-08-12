@@ -6,18 +6,31 @@ export interface AgentRewindState {
   connected: boolean;
   stopped: boolean;
   actions: ActionRecord[];
+  /**
+   * Held actions tracked from the snapshot's dedicated (uncapped) held list
+   * plus live events — NOT derived from the row-capped actions array, so an
+   * old held item stays approvable however long the timeline grows.
+   */
+  held: ActionRecord[];
   rewinds: RewindReport[];
+}
+
+function upsertHeld(held: ActionRecord[], action: ActionRecord): ActionRecord[] {
+  const without = held.filter((h) => h.id !== action.id);
+  return action.status === "held" ? [...without, action] : without;
 }
 
 /**
  * Live timeline state: initial fetch + SSE merge. Status events update rows
- * in place; a completed rewind triggers a refetch (bulk status change).
+ * in place; a completed rewind — or an SSE reconnect, which may have missed
+ * events — triggers a full refetch.
  */
 export function useAgentRewind(): AgentRewindState & { refresh: () => void } {
   const [state, setState] = useState<AgentRewindState>({
     connected: false,
     stopped: false,
     actions: [],
+    held: [],
     rewinds: [],
   });
   const esRef = useRef<EventSource | null>(null);
@@ -30,6 +43,7 @@ export function useAgentRewind(): AgentRewindState & { refresh: () => void } {
           ...s,
           stopped: t.stopped,
           actions: t.actions,
+          held: t.held,
           rewinds: t.rewinds,
         })),
       )
@@ -37,10 +51,13 @@ export function useAgentRewind(): AgentRewindState & { refresh: () => void } {
   }, []);
 
   useEffect(() => {
-    refresh();
     const es = new EventSource("/api/events");
     esRef.current = es;
-    es.onopen = () => setState((s) => ({ ...s, connected: true }));
+    es.onopen = () => {
+      setState((s) => ({ ...s, connected: true }));
+      // Reconnect = a gap in events; resync the whole snapshot.
+      refresh();
+    };
     es.onerror = () => setState((s) => ({ ...s, connected: false }));
     es.onmessage = (msg) => {
       const event = JSON.parse(msg.data as string) as TimelineEvent;
@@ -53,13 +70,14 @@ export function useAgentRewind(): AgentRewindState & { refresh: () => void } {
               existing >= 0
                 ? s.actions.map((a) => (a.id === action.id ? action : a))
                 : [action, ...s.actions];
-            return { ...s, actions };
+            return { ...s, actions, held: upsertHeld(s.held, action) };
           }
           case "status": {
             const action = event.action!;
             return {
               ...s,
               actions: s.actions.map((a) => (a.id === action.id ? action : a)),
+              held: upsertHeld(s.held, action),
             };
           }
           case "stop":

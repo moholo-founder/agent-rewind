@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ActionRow } from "./ActionRow";
 import { api } from "./api";
 import { RewindModal } from "./RewindModal";
@@ -7,10 +7,9 @@ import { useAgentRewind } from "./useAgentRewind";
 import "./styles.css";
 
 export function App() {
-  const { connected, stopped, actions, refresh } = useAgentRewind();
+  const { connected, stopped, actions, held, refresh } = useAgentRewind();
   const [rewindAnchor, setRewindAnchor] = useState<{ iso: string; label: string } | null>(null);
-
-  const held = useMemo(() => actions.filter((a) => a.status === "held"), [actions]);
+  const [heldError, setHeldError] = useState<string | null>(null);
 
   const rewindToBefore = (a: ActionRecord) => {
     const t = new Date(a.executedTs ?? a.ts).getTime() - 1;
@@ -21,10 +20,14 @@ export function App() {
   };
 
   const rewindEverything = () => {
-    const executed = actions.filter((a) => a.executedTs && a.causedBy === null && a.class !== "read");
-    if (executed.length === 0) return;
-    const oldest = executed[executed.length - 1]!;
-    const t = new Date(oldest.executedTs!).getTime() - 1;
+    // Anchor on the earliest EXECUTION time, not journal order: a held
+    // action approved late executes out of ts order and would otherwise be
+    // left out of "rewind everything".
+    const executedTimes = actions
+      .filter((a) => a.executedTs && a.causedBy === null && a.class !== "read")
+      .map((a) => new Date(a.executedTs!).getTime());
+    if (executedTimes.length === 0) return;
+    const t = Math.min(...executedTimes) - 1;
     setRewindAnchor({
       iso: new Date(t).toISOString(),
       label: `the beginning of the session (${new Date(t).toLocaleTimeString()})`,
@@ -32,9 +35,13 @@ export function App() {
   };
 
   const decide = async (id: string, verb: "approve" | "reject") => {
+    setHeldError(null);
     try {
       await (verb === "approve" ? api.approve(id) : api.reject(id));
-    } catch {
+    } catch (err) {
+      setHeldError(
+        `${verb === "approve" ? "Approve" : "Reject"} failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
       refresh();
     }
   };
@@ -80,6 +87,11 @@ export function App() {
       {held.length > 0 && (
         <section className="held-tray">
           <h2>⏸ HELD — WAITING FOR YOUR DECISION ({held.length})</h2>
+          {heldError && (
+            <div className="stop-banner" style={{ margin: "10px 16px" }}>
+              ⚠ {heldError}
+            </div>
+          )}
           {held.map((a) => (
             <div className="held-item" key={a.id}>
               <span className={`badge ${a.class}`}>{a.class}</span>
