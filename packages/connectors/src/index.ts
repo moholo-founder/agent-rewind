@@ -7,3 +7,4 @@ export {
   createFilesystemConnector,
   type FilesystemConnector,
 } from "./fs/connector.js";
+export { createFilesystemMcpServer } from "./fs/server.js";

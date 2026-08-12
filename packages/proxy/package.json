@@ -17,9 +17,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@backstop/core": "workspace:*"
+    "@backstop/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@backstop/connectors": "workspace:^",
+    "@types/node": "^20.17.9",
     "typescript": "^5.5.4",
     "vitest": "^2.1.9"
   }
