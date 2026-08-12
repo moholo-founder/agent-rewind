@@ -142,7 +142,7 @@ describe("proxy end-to-end", () => {
   });
 
   it("holds a blast-radius breach; approval executes it; rewind restores", async () => {
-    const anchor = new Date().toISOString();
+    const anchor = new Date(Date.now() - 10).toISOString();
     fs.mkdirSync(path.join(root, "big"));
     for (let i = 0; i < 30; i++) {
       fs.writeFileSync(path.join(root, "big", `f${i}.txt`), `content-${i}`);
@@ -207,7 +207,7 @@ describe("proxy end-to-end", () => {
   });
 
   it("multi-step rewind unwinds in LIFO order across mixed operations", async () => {
-    const anchor = new Date().toISOString();
+    const anchor = new Date(Date.now() - 10).toISOString();
     await agent.callTool({
       name: "write_file",
       arguments: { path: "a.txt", content: "v1" },

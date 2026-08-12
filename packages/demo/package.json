@@ -12,7 +12,11 @@
     "demo": "node dist/index.js"
   },
   "dependencies": {
-    "@backstop/core": "workspace:*"
+    "@backstop/api": "workspace:^",
+    "@backstop/connectors": "workspace:^",
+    "@backstop/core": "workspace:*",
+    "@backstop/proxy": "workspace:^",
+    "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "devDependencies": {
     "@types/node": "^20.17.9",

@@ -95,9 +95,21 @@ importers:
 
   packages/demo:
     dependencies:
+      '@backstop/api':
+        specifier: workspace:^
+        version: link:../api
+      '@backstop/connectors':
+        specifier: workspace:^
+        version: link:../connectors
       '@backstop/core':
         specifier: workspace:*
         version: link:../core
+      '@backstop/proxy':
+        specifier: workspace:^
+        version: link:../proxy
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.30.0
+        version: 1.30.0(zod@4.4.3)
     devDependencies:
       '@types/node':
         specifier: ^20.17.9

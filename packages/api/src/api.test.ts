@@ -191,7 +191,7 @@ describe("API", () => {
   });
 
   it("rewind preview + rewind returns an honest report including an induced undo failure", async () => {
-    const anchor = new Date().toISOString();
+    const anchor = new Date(Date.now() - 10).toISOString();
 
     // Action 1: email bulk delete (will undo cleanly).
     await agent.callTool({ name: "delete_many", arguments: { folder: "inbox" } });

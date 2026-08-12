@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backstop-demo",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["packages/demo/dist/index.js"],
+      "port": 4820
+    }
+  ]
+}
