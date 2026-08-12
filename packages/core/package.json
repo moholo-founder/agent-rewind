@@ -17,7 +17,12 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^20.17.9",
     "typescript": "^5.5.4",
     "vitest": "^2.1.9"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3"
   }
 }
