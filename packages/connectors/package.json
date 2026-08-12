@@ -20,6 +20,7 @@
     "@backstop/core": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^20.17.9",
     "typescript": "^5.5.4",
     "vitest": "^2.1.9"
   }
