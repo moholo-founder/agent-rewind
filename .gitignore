@@ -10,3 +10,6 @@ coverage/
 .claude/settings.local.json
 packages/demo/.backstop-demo/
 packages/demo/.backstop-live/
+packages/backstop/web/
+packages/backstop/README.md
+*.tgz

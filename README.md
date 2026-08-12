@@ -1,5 +1,7 @@
 # Backstop
 
+[![CI](https://github.com/moholo-founder/agent-rewind/actions/workflows/ci.yml/badge.svg)](https://github.com/moholo-founder/agent-rewind/actions/workflows/ci.yml)
+
 **A flight recorder + undo button for AI agents.**
 
 Backstop sits between an AI agent and its tools as a transparent MCP proxy. Every
@@ -60,9 +62,41 @@ Operator click-path:
 
 Demo state lives in `packages/demo/.backstop-demo/` and is wiped on each run.
 
+## Install / use with an MCP client
+
+Backstop is pure JavaScript — **zero native dependencies, no compiler, no
+toolchain** (SQLite comes from Node's built-in `node:sqlite`). Requires
+Node 22.5+. Verified by CI on Linux, macOS, and Windows (Node 22 & 24).
+
+Once published to npm (`packages/backstop`, name `backstop-mcp`), registration
+is one block in any MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "backstop": { "command": "npx", "args": ["-y", "backstop-mcp"] }
+  }
+}
+```
+
+Or from this repo today (used by the project's own `.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "backstop": { "command": "node", "args": ["packages/demo/dist/serve.js"] }
+  }
+}
+```
+
+Either way the timeline UI comes up on http://localhost:4821 and every tool
+call the agent makes is journaled, snapshotted, gated, and reversible. State
+(including the kill switch) persists in `~/.backstop` (npx) or
+`packages/demo/.backstop-live` (repo).
+
 ## How to run (dev)
 
-Requires Node 20+ and pnpm 9+.
+Requires Node 22.5+ and pnpm 9+.
 
 ```bash
 pnpm install
