@@ -1,7 +1,7 @@
-import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
 /**
  * Backing store for the self-contained mock email server. Entirely local
@@ -52,14 +52,14 @@ function rowToMessage(row: Row): EmailMessage {
 }
 
 export class EmailStore {
-  private readonly db: Database.Database;
+  private readonly db: DatabaseSync;
 
   constructor(dbPath: string) {
     if (dbPath !== ":memory:") {
       fs.mkdirSync(path.dirname(dbPath), { recursive: true });
     }
-    this.db = new Database(dbPath);
-    this.db.pragma("journal_mode = WAL");
+    this.db = new DatabaseSync(dbPath);
+    this.db.exec("PRAGMA journal_mode = WAL");
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS messages (
         id TEXT PRIMARY KEY,
@@ -96,14 +96,14 @@ export class EmailStore {
   list(folder: EmailFolder, limit = 500): EmailMessage[] {
     const rows = this.db
       .prepare("SELECT * FROM messages WHERE folder = ? ORDER BY ts DESC LIMIT ?")
-      .all(folder, limit) as Row[];
+      .all(folder, limit) as unknown as Row[];
     return rows.map(rowToMessage);
   }
 
   count(folder: EmailFolder): number {
     const row = this.db
       .prepare("SELECT COUNT(*) AS n FROM messages WHERE folder = ?")
-      .get(folder) as { n: number };
+      .get(folder) as unknown as { n: number };
     return row.n;
   }
 
@@ -117,11 +117,8 @@ export class EmailStore {
   /** Move every message in a folder to __trash. Returns the moved ids. */
   trashFolder(folder: EmailFolder): string[] {
     const ids = this.list(folder, 100_000).map((m) => m.id);
-    const stmt = this.db.prepare("UPDATE messages SET folder = '__trash' WHERE id = ?");
-    const tx = this.db.transaction((all: string[]) => {
-      for (const id of all) stmt.run(id);
-    });
-    tx(ids);
+    // Single statement — atomic without an explicit transaction.
+    this.db.prepare("UPDATE messages SET folder = '__trash' WHERE folder = ?").run(folder);
     return ids;
   }
 
@@ -142,7 +139,7 @@ export class EmailStore {
   deliverDue(now = new Date()): number {
     const rows = this.db
       .prepare("SELECT id FROM messages WHERE folder = 'outbox' AND deliver_after <= ?")
-      .all(now.toISOString()) as { id: string }[];
+      .all(now.toISOString()) as unknown as { id: string }[];
     for (const { id } of rows) {
       this.db
         .prepare("UPDATE messages SET folder = 'sent', deliver_after = NULL WHERE id = ?")
@@ -160,7 +157,7 @@ export class EmailStore {
       .prepare(
         "SELECT * FROM messages WHERE folder = 'outbox' AND to_addr = ? AND subject = ? ORDER BY ts DESC LIMIT 1",
       )
-      .get(match.to, match.subject) as Row | undefined;
+      .get(match.to, match.subject) as unknown as Row | undefined;
     if (inOutbox) {
       this.moveTo(inOutbox.id, "__recalled");
       return { canceled: true, reason: "Recalled from outbox before delivery", id: inOutbox.id };
@@ -169,7 +166,7 @@ export class EmailStore {
       .prepare(
         "SELECT * FROM messages WHERE folder = 'sent' AND to_addr = ? AND subject = ? ORDER BY ts DESC LIMIT 1",
       )
-      .get(match.to, match.subject) as Row | undefined;
+      .get(match.to, match.subject) as unknown as Row | undefined;
     if (delivered) {
       return {
         canceled: false,
@@ -181,7 +178,7 @@ export class EmailStore {
       .prepare(
         "SELECT * FROM messages WHERE folder = '__recalled' AND to_addr = ? AND subject = ? ORDER BY ts DESC LIMIT 1",
       )
-      .get(match.to, match.subject) as Row | undefined;
+      .get(match.to, match.subject) as unknown as Row | undefined;
     if (recalled) {
       return { canceled: true, reason: "Already recalled", id: recalled.id };
     }

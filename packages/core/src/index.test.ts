@@ -62,7 +62,7 @@ describe("Journal", () => {
   it("enforces append-only: identity columns cannot be rewritten", () => {
     const rec = journal.record(sampleAction());
     // Reach under the hood exactly like an attacker/bug would.
-    const db = (journal as unknown as { db: import("better-sqlite3").Database }).db;
+    const db = (journal as unknown as { db: import("node:sqlite").DatabaseSync }).db;
     expect(() =>
       db.prepare("UPDATE actions SET tool = 'innocent_read' WHERE id = ?").run(rec.id),
     ).toThrow(/append-only/);

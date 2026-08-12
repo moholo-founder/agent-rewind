@@ -1,5 +1,5 @@
-import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
 import type {
@@ -85,15 +85,15 @@ function rowToRecord(row: ActionRow): ActionRecord {
 }
 
 export class Journal {
-  private readonly db: Database.Database;
+  private readonly db: DatabaseSync;
 
   constructor(dbPath: string) {
     if (dbPath !== ":memory:") {
       fs.mkdirSync(path.dirname(dbPath), { recursive: true });
     }
-    this.db = new Database(dbPath);
-    this.db.pragma("journal_mode = WAL");
-    this.db.pragma("foreign_keys = ON");
+    this.db = new DatabaseSync(dbPath);
+    this.db.exec("PRAGMA journal_mode = WAL");
+    this.db.exec("PRAGMA foreign_keys = ON");
     this.migrate();
   }
 
@@ -199,7 +199,7 @@ export class Journal {
   get(id: string): ActionRecord {
     const row = this.db
       .prepare("SELECT * FROM actions WHERE id = ?")
-      .get(id) as ActionRow | undefined;
+      .get(id) as unknown as ActionRow | undefined;
     if (!row) throw new Error(`No journal entry with id ${id}`);
     return rowToRecord(row);
   }
@@ -253,17 +253,17 @@ export class Journal {
           .prepare(
             "SELECT * FROM actions WHERE session_id = ? ORDER BY ts DESC, rowid DESC LIMIT ?",
           )
-          .all(opts.sessionId, limit) as ActionRow[])
+          .all(opts.sessionId, limit) as unknown as ActionRow[])
       : (this.db
           .prepare("SELECT * FROM actions ORDER BY ts DESC, rowid DESC LIMIT ?")
-          .all(limit) as ActionRow[]);
+          .all(limit) as unknown as ActionRow[]);
     return rows.map(rowToRecord);
   }
 
   listHeld(): ActionRecord[] {
     const rows = this.db
       .prepare("SELECT * FROM actions WHERE status = 'held' ORDER BY ts ASC")
-      .all() as ActionRow[];
+      .all() as unknown as ActionRow[];
     return rows.map(rowToRecord);
   }
 
@@ -284,7 +284,7 @@ export class Journal {
            AND status IN ('executed', 'undo-failed')
          ORDER BY executed_ts DESC, rowid DESC`,
       )
-      .all(anchorIso) as ActionRow[];
+      .all(anchorIso) as unknown as ActionRow[];
     return rows.map(rowToRecord);
   }
 
@@ -308,7 +308,7 @@ export class Journal {
   getSnapshotEntry(ref: string): SnapshotIndexEntry | null {
     const row = this.db
       .prepare("SELECT * FROM snapshots WHERE ref = ?")
-      .get(ref) as
+      .get(ref) as unknown as
       | { ref: string; kind: SnapshotKind; bytes: number; created_ts: string; meta: string }
       | undefined;
     if (!row) return null;
@@ -334,7 +334,7 @@ export class Journal {
   listRewinds(): RewindReport[] {
     const rows = this.db
       .prepare("SELECT report FROM rewind_sessions ORDER BY ts DESC")
-      .all() as { report: string }[];
+      .all() as unknown as { report: string }[];
     return rows.map((r) => JSON.parse(r.report) as RewindReport);
   }
 
@@ -346,7 +346,7 @@ export class Journal {
   isStopped(): boolean {
     const row = this.db
       .prepare("SELECT value FROM control WHERE key = 'stopped'")
-      .get() as { value: string } | undefined;
+      .get() as unknown as { value: string } | undefined;
     return row?.value === "true";
   }
 
