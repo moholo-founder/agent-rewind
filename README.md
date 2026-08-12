@@ -4,6 +4,8 @@
 
 **A flight recorder + undo button for AI agents.**
 
+![Agent Rewind demo: rogue agent wipes 200 emails and 40 files; operator approves the held bulk delete, clicks Rewind, and everything comes back — “Fully restored”.](docs/demo.gif)
+
 Agent Rewind sits between an AI agent and its tools as a transparent MCP proxy. Every
 action flows through it and is journaled, snapshotted for reversibility, risk-classified,
 and policy-gated before it executes. A live web timeline gives a human operator
