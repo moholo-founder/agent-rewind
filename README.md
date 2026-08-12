@@ -175,6 +175,21 @@ Key rules, all enforced in code (not convention):
   moving a file back). Files are byte-identical; empty-dir tracking is a
   fast-follow nicety.
 
+## License
+
+Agent Rewind is **source-available** under the [Business Source License 1.1](LICENSE.md),
+© 2026 [Moholo Inc.](mailto:founders@moholo.co):
+
+- **Free forever** for individuals, nonprofits, education, and organizations
+  under 25 people / US $2M revenue — including production use.
+- **Free for everyone** for development, testing, and evaluation.
+- **Commercial license required** for production use above those thresholds —
+  see [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
+- Each version **becomes Apache 2.0 open source four years after release**.
+
+See also [TERMS.md](TERMS.md) and the contributor agreement in
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Fast-follow (explicit v1 non-goals)
 
 - Real Gmail/Slack/Stripe OAuth connectors (v1 email is a self-contained mock;

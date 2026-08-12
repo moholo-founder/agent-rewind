@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Flight recorder + undo button for AI agents. MCP interception proxy: journals every tool call, snapshots state before destructive actions, holds oversized ones for approval, and gives operators per-action Undo, Rewind-to-T, and a kill switch.",
   "keywords": ["mcp", "model-context-protocol", "ai-agents", "safety", "undo", "audit"],
-  "license": "MIT",
+  "license": "BUSL-1.1",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/moholo-founder/agent-rewind.git"
