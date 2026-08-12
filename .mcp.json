@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "backstop": {
+      "command": "node",
+      "args": ["packages/demo/dist/serve.js"],
+      "env": {
+        "BACKSTOP_PORT": "4821"
+      }
+    }
+  }
+}
