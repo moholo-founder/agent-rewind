@@ -1,0 +1,43 @@
+name: metrics
+
+# GitHub's traffic API only retains 14 days — snapshot daily so growth
+# history survives. Appends one JSON line per day to metrics/traffic.jsonl.
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Append traffic snapshot
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p metrics
+          DATE=$(date -u +%F)
+          CLONES=$(gh api repos/${{ github.repository }}/traffic/clones)
+          VIEWS=$(gh api repos/${{ github.repository }}/traffic/views)
+          REPO=$(gh api repos/${{ github.repository }})
+          jq -cn \
+            --arg date "$DATE" \
+            --argjson clones "$CLONES" \
+            --argjson views "$VIEWS" \
+            --argjson repo "$REPO" \
+            '{date: $date,
+              stars: $repo.stargazers_count,
+              forks: $repo.forks_count,
+              clones_14d: $clones.count, unique_cloners_14d: $clones.uniques,
+              views_14d: $views.count, unique_visitors_14d: $views.uniques}' \
+            >> metrics/traffic.jsonl
+          git config user.name "metrics-bot"
+          git config user.email "actions@github.com"
+          git add metrics/traffic.jsonl
+          git diff --cached --quiet || git commit -m "metrics: daily traffic snapshot $DATE"
+          git push
