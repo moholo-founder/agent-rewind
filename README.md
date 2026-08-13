@@ -96,6 +96,36 @@ call the agent makes is journaled, snapshotted, gated, and reversible. State
 (including the kill switch) persists in `~/.agent-rewind` (npx) or
 `packages/demo/.agent-rewind-live` (repo).
 
+## Flight-record native Claude Code sessions (hooks mode)
+
+The MCP proxy protects the tools it wraps — but Claude Code's *built-in*
+Bash/Edit/Write tools never pass through an MCP server. Hooks mode closes
+that gap using Claude Code's own `PreToolUse`/`PostToolUse` hooks, which the
+agent cannot route around:
+
+```bash
+agent-rewind hooks install        # wires .claude/settings.json in this project
+agent-rewind ui                   # operator console on :4821
+```
+
+Every new Claude Code session in the project is then flight-recorded:
+
+- **Journaled** — Bash/Edit/Write/MultiEdit/NotebookEdit calls are recorded
+  as intent (`pending`) *before* they run and transitioned on completion.
+- **Undoable** — file edits are snapshotted pre-edit; the timeline's Undo
+  restores them byte-identical. Arbitrary Bash is journaled and gated but
+  honestly `not-reversible` (no automatic inverse exists — see below).
+- **Gated** — dangerous shell patterns (`rm -rf`, `sudo`, `dd of=`,
+  `curl | sh`, force-push, ...) escalate to an explicit permission prompt.
+- **Stoppable** — the STOP switch in the UI refuses every tracked native
+  tool until a human resumes. It lives in Agent Rewind's SQLite, outside the
+  agent's context.
+
+Honesty note: hooks mode is a recorder and gate for native tools, not a
+sandbox. If a `Bash` command must be reversible, run the agent against the
+MCP filesystem connector (full snapshots) — or keep the sandbox tier below
+on the roadmap in mind.
+
 ## How to run (dev)
 
 Requires Node 22.13+ and pnpm 9+.

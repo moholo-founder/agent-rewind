@@ -1,5 +1,7 @@
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import {
   defaultRiskScore,
@@ -491,6 +493,12 @@ export class AgentRewindRuntime {
   // ---- undo / rewind --------------------------------------------------------
 
   private async performUndo(action: ActionRecord): Promise<UndoResult> {
+    // Actions captured by the Claude Code hooks (native Bash/Edit/Write)
+    // have no connector route; file edits carry a cc-file snapshot and are
+    // restored directly, shell commands are honestly not reversible.
+    if (action.connector === "claude-code") {
+      return this.undoClaudeCodeAction(action);
+    }
     const route = this.routes.get(action.tool);
     const compensator = route?.capability?.compensator;
     if (!route || !compensator) {
@@ -500,6 +508,35 @@ export class AgentRewindRuntime {
       };
     }
     return compensator.undo(action, this.contextFor(route.connector));
+  }
+
+  private undoClaudeCodeAction(action: ActionRecord): UndoResult {
+    if (!action.preStateRef) {
+      return {
+        outcome: "not-reversible",
+        detail:
+          "Shell commands have no automatic inverse — recover via git, backups, or a filesystem snapshot. File edits made with Edit/Write ARE undoable.",
+      };
+    }
+    const pre = this.snapshots.getRecord<{
+      kind: string;
+      path: string;
+      present: boolean;
+      contentRef?: string;
+    }>(action.preStateRef);
+    if (pre.kind !== "cc-file") {
+      return { outcome: "failed", detail: `Unrecognized pre-state kind "${pre.kind}"` };
+    }
+    // Operator-initiated restore of the user's own edit history: absolute
+    // paths are intentional here (hooks capture edits anywhere the user let
+    // Claude Code write).
+    if (pre.present) {
+      fs.mkdirSync(path.dirname(pre.path), { recursive: true });
+      fs.writeFileSync(pre.path, this.snapshots.getBlob(pre.contentRef ?? ""));
+      return { outcome: "undone", detail: `Restored prior content of ${pre.path}` };
+    }
+    if (fs.existsSync(pre.path)) fs.rmSync(pre.path);
+    return { outcome: "undone", detail: `Removed ${pre.path} (did not exist before)` };
   }
 
   /** Undo a single executed action (timeline Undo button). */
