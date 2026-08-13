@@ -49,9 +49,18 @@ agent-rewind hooks install    # wires this project's .claude/settings.json
 agent-rewind ui               # operator console
 ```
 
-File edits become undoable (snapshotted before they land), dangerous shell
-patterns escalate to an explicit permission prompt, and the STOP switch
-refuses every native tool until a human resumes.
+File edits become undoable (snapshotted before they land) — **and so do
+Bash commands**: the project tree is snapshotted before each command
+(content-addressed dedup + an mtime cache keep it cheap) and diffed after,
+so Undo restores exactly the files a command modified, created, or deleted.
+Dangerous shell patterns escalate to an explicit permission prompt, and the
+STOP switch refuses every native tool until a human resumes.
+
+Honest coverage boundary: Bash undo covers file effects **inside the
+project directory** (skipping `node_modules`-style dirs, files >5MB, and
+symlinks — skips are noted in the journal). Processes started, network
+calls made, and writes outside the project are not reversible and are
+reported as such. Hooks mode is a recorder and gate, not a sandbox.
 
 ## What you get
 
@@ -109,8 +118,6 @@ after release. See [TERMS.md](TERMS.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Roadmap
 
 - Real connectors: Gmail, Slack, Stripe (OAuth), with per-field redaction
-- Reversible-shell tier: filesystem snapshots (APFS/btrfs) bracketing agent
-  sessions, so even arbitrary Bash can be rolled back
 - Enterprise: audit export, SSO, retention policies, multi-operator
 - HTTP/SSE MCP transport; held-action persistence across restarts
 
