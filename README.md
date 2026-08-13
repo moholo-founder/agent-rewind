@@ -1,77 +1,34 @@
 # Agent Rewind
 
+**The flight recorder + undo button for AI agents.**
+
 [![CI](https://github.com/moholo-founder/agent-rewind/actions/workflows/ci.yml/badge.svg)](https://github.com/moholo-founder/agent-rewind/actions/workflows/ci.yml)
 
-**A flight recorder + undo button for AI agents.**
+AI agents take real, irreversible actions — they delete files, send emails, call
+APIs. When one goes off the rails, there is no black box to read and no undo
+button to press. Agent Rewind is both: a transparent proxy between your agent
+and its tools that records every action, snapshots state before anything
+destructive runs, holds oversized operations for human approval, and gives you
+**per-action Undo**, **Rewind-to-a-point-in-time**, and a **kill switch the
+agent cannot talk its way around**.
 
-![Agent Rewind demo: rogue agent wipes 200 emails and 40 files; operator approves the held bulk delete, clicks Rewind, and everything comes back — “Fully restored”.](docs/demo.gif)
+![Agent Rewind demo: a rogue agent wipes 200 emails and 40 files; the operator approves the held bulk delete, clicks Rewind, and everything comes back — “Fully restored”.](docs/demo.gif)
 
-Agent Rewind sits between an AI agent and its tools as a transparent MCP proxy. Every
-action flows through it and is journaled, snapshotted for reversibility, risk-classified,
-and policy-gated before it executes. A live web timeline gives a human operator
-per-action **Undo**, a global **Rewind to time T**, a persistent **Kill Switch**, and an
-approval tray for held actions.
-
-Design values: legibility over cleverness · safety-by-default (unknown/destructive
-actions are held, not executed) · honest failure (a failed undo is reported loudly,
-never faked).
-
-## Current state — all v1 milestones complete
-
-| Milestone | Status |
-| --- | --- |
-| M0 — Scaffold | ✅ |
-| M1 — Journal + snapshot core | ✅ |
-| M2 — Filesystem connector + compensators | ✅ |
-| M3 — Proxy + policy gate | ✅ |
-| M4 — Mock email connector | ✅ |
-| M5 — API (REST + SSE) | ✅ |
-| M6 — Web timeline + demo | ✅ |
-
-58 tests across the workspace, including a do→undo→byte-identical round trip for
-every compensator, proxy integration tests through the real MCP SDK, and a
-deliberately induced undo failure asserting the system reports it honestly.
-
-## The demo (the money shot)
+## See it in 60 seconds
 
 ```bash
-pnpm install
-pnpm demo
+git clone https://github.com/moholo-founder/agent-rewind.git
+cd agent-rewind && pnpm install && pnpm demo
 ```
 
-Then open **http://localhost:4820** and watch. A scripted rogue agent:
+Open **http://localhost:4820**. A scripted rogue agent wipes a 200-message
+inbox, deletes files, and queues embarrassing emails — then you press
+**⏪ Rewind** and watch everything come back, with a per-action report that
+never claims more than it restored.
 
-1. reads around the workspace and inbox (reads pass through untouched),
-2. clobbers `config.json` (disables backups), shuffles files around,
-3. queues two embarrassing company-wide/vendor emails,
-4. deletes the README, **wipes the entire 200-message inbox**,
-5. tries to bulk-delete 40 quarterly reports — **held** by the blast-radius gate.
+## Use it with your agent
 
-Operator click-path:
-
-1. **Approve** the held 40-file delete in the amber tray — watch it execute.
-2. Click any row for before/after **diffs** (file content diff, inbox contents, folder moves).
-3. Press **⏪ Rewind…** (top right) → preview lists everything that will be undone,
-   newest first → **Confirm** → the report shows per-action outcomes and the
-   timeline flips to `undone` as 200 emails and every file come back.
-4. The queued emails are **recalled from the outbox** (3-minute delivery window).
-   Wait out the window before rewinding and the report will honestly say
-   `not-reversible — already delivered` instead.
-5. Hit **STOP** — every further side-effecting call is refused and journaled as
-   `blocked-by-stop` until you press RESUME. The flag lives in Agent Rewind's SQLite,
-   not in the agent's context, so no amount of agent "creativity" or context
-   compaction clears it.
-
-Demo state lives in `packages/demo/.agent-rewind-demo/` and is wiped on each run.
-
-## Install / use with an MCP client
-
-Agent Rewind is pure JavaScript — **zero native dependencies, no compiler, no
-toolchain** (SQLite comes from Node's built-in `node:sqlite`). Requires
-Node 22.13+. Verified by CI on Linux, macOS, and Windows (Node 22 & 24).
-
-Once published to npm (`packages/agent-rewind`, name `agent-rewind`), registration
-is one block in any MCP client config:
+**Any MCP client** (Claude Code, Claude Desktop, Cursor, ...) — one config block:
 
 ```json
 {
@@ -81,156 +38,81 @@ is one block in any MCP client config:
 }
 ```
 
-Or from this repo today (used by the project's own `.mcp.json`):
+Every tool call your agent makes through the proxy is journaled, snapshotted,
+policy-gated, and reversible from the timeline UI at http://localhost:4821.
 
-```json
-{
-  "mcpServers": {
-    "agent-rewind": { "command": "node", "args": ["packages/demo/dist/serve.js"] }
-  }
-}
-```
-
-Either way the timeline UI comes up on http://localhost:4821 and every tool
-call the agent makes is journaled, snapshotted, gated, and reversible. State
-(including the kill switch) persists in `~/.agent-rewind` (npx) or
-`packages/demo/.agent-rewind-live` (repo).
-
-## Flight-record native Claude Code sessions (hooks mode)
-
-The MCP proxy protects the tools it wraps — but Claude Code's *built-in*
-Bash/Edit/Write tools never pass through an MCP server. Hooks mode closes
-that gap using Claude Code's own `PreToolUse`/`PostToolUse` hooks, which the
-agent cannot route around:
+**Native Claude Code sessions** (built-in Bash/Edit/Write, no MCP involved) —
+hooks mode:
 
 ```bash
-agent-rewind hooks install        # wires .claude/settings.json in this project
-agent-rewind ui                   # operator console on :4821
+agent-rewind hooks install    # wires this project's .claude/settings.json
+agent-rewind ui               # operator console
 ```
 
-Every new Claude Code session in the project is then flight-recorded:
+File edits become undoable (snapshotted before they land), dangerous shell
+patterns escalate to an explicit permission prompt, and the STOP switch
+refuses every native tool until a human resumes.
 
-- **Journaled** — Bash/Edit/Write/MultiEdit/NotebookEdit calls are recorded
-  as intent (`pending`) *before* they run and transitioned on completion.
-- **Undoable** — file edits are snapshotted pre-edit; the timeline's Undo
-  restores them byte-identical. Arbitrary Bash is journaled and gated but
-  honestly `not-reversible` (no automatic inverse exists — see below).
-- **Gated** — dangerous shell patterns (`rm -rf`, `sudo`, `dd of=`,
-  `curl | sh`, force-push, ...) escalate to an explicit permission prompt.
-- **Stoppable** — the STOP switch in the UI refuses every tracked native
-  tool until a human resumes. It lives in Agent Rewind's SQLite, outside the
-  agent's context.
+## What you get
 
-Honesty note: hooks mode is a recorder and gate for native tools, not a
-sandbox. If a `Bash` command must be reversible, run the agent against the
-MCP filesystem connector (full snapshots) — or keep the sandbox tier below
-on the roadmap in mind.
+- **Live timeline** — every action as it happens: who, what, blast radius,
+  risk class, status, before/after diffs.
+- **Undo** — one click restores what an action destroyed, byte-identical,
+  from content-addressed snapshots captured *before* execution.
+- **Rewind** — pick a point in time, preview exactly what will be undone,
+  confirm, and unwind it all in strict reverse order of execution.
+- **Kill switch** — STOP refuses every side-effecting call until a human
+  resumes. The flag lives in Agent Rewind's own storage, outside the agent's
+  context — context compaction and creative reasoning cannot clear it.
+- **Blast-radius holds** — actions over a per-connector threshold (delete 40
+  files, wipe 200 messages) wait in an approval tray instead of executing.
+- **Append-only journal** — tamper-resistant evidence (SQLite triggers refuse
+  deletes and rewrites), with secrets redacted at write time.
+- **Honest failure** — an undo that fails says so, loudly, per action.
+  `Fully restored` is only ever claimed when it is true.
 
-## How to run (dev)
-
-Requires Node 22.13+ and pnpm 9+.
-
-```bash
-pnpm install
-pnpm -r build     # build all packages
-pnpm -r test      # run all tests
-pnpm demo         # build + boot the full demo stack on :4820
-```
-
-For UI development: `pnpm demo` in one terminal, `pnpm --filter @agentrewind/web dev`
-in another (Vite dev server proxies `/api` to :4820).
-
-To put Agent Rewind in front of a real MCP client, run the downstream servers it
-should wrap (e.g. `node packages/connectors/dist/fs/main.js <sandbox-root>`) and
-wire `AgentRewindRuntime` + `createProxyServer` over stdio — `packages/demo/src/index.ts`
-is the reference wiring.
-
-## Layout
+## How it works
 
 ```
-packages/
-  core/         # journal, snapshot store, policy engine, reversibility model, rewind engine
-  proxy/        # AgentRewindRuntime (the gate) + agent-facing MCP server
-  connectors/   # filesystem + mock-email: MCP servers, manifests, compensators
-  api/          # express + SSE, serves timeline data and undo/rewind commands
-  web/          # React timeline UI
-  demo/         # seed data + scripted rogue agent
-```
-
-## Architecture
-
-```
-[ MCP client / agent ]
-        │  (MCP)
+[ agent / MCP client ]
+        │  MCP
         ▼
-  Agent Rewind Proxy: classify → policy gate → capture pre-state →
-                  forward downstream → journal + SSE → return result
-        │  (MCP, stdio in the demo)
+  Agent Rewind proxy — classify → gate (allow / hold / block) →
+                       snapshot pre-state → execute → journal + live UI
+        │  MCP
         ▼
-[ downstream MCP servers: filesystem, mock-email ]
+[ your tool servers: filesystem, email, ... ]
 ```
 
-Key rules, all enforced in code (not convention):
+Reversibility is per-connector: each tool declares its class (read /
+reversible / destructive) and ships a *compensator* — capture what the action
+will destroy, and how to restore it. Reads pass through untouched. Unknown
+tools are held for approval, never silently executed. v1 ships a sandboxed
+**filesystem** connector and a self-contained **mock email** connector (
+delayed outbox with a recall window — after delivery, undo honestly reports
+`not-reversible`). The interface is designed so real connectors (Gmail,
+Slack, Stripe) drop in without touching core.
 
-- **Reads pass through untouched** — never gated, never snapshotted.
-- **Per-connector capability manifests** declare class/compensator/blast-radius per
-  tool. Undeclared tools default to hold-for-approval, never silent execution.
-- **The journal is append-only** — SQLite triggers ABORT deletes and identity
-  rewrites; undo/rewind append compensating entries linked via `caused_by`.
-- **Rewind is LIFO by execution time** (not journal time — held actions approved
-  later execute out of order), each undo in its own try/catch, and the report
-  never claims restoration that didn't happen (`fullyRestored` requires every
-  outcome to be `undone`).
-- **STOP is durable** — a flag in Agent Rewind's own SQLite; only a human RESUME
-  clears it. Blocked calls are journaled as `blocked-by-stop`.
-- **No secrets in the journal** — a global denylist redactor (values → shape +
-  hash + length) plus per-tool `redactFields` for connector opt-outs. Mock email
-  bodies are synthetic and stored; a real connector should opt its bodies out.
-- **Snapshots are content-addressed** (sha256 → blob) and integrity-checked on
-  read — a corrupted snapshot fails loudly rather than restoring garbage.
-- **The filesystem sandbox refuses escapes** — lexical `..`/absolute checks plus
-  realpath symlink containment, enforced in both the downstream server and the
-  compensators.
-- **Email sends are time-bounded reversible** — recallable while in the outbox
-  window, honestly `not-reversible` after delivery.
-
-## Design notes / decisions made along the way
-
-- **Held actions and restarts:** raw (unredacted) arguments for held actions live
-  only in runtime memory. If Agent Rewind restarts, a held action can no longer
-  execute and is auto-rejected on approval attempt — safe by construction.
-- **Approval under STOP:** approving a held action while the kill switch is
-  tripped is refused; resume first.
-- **Capture-before-execute is load-bearing:** if pre-state capture fails, the
-  action is refused rather than executed un-undoably.
-- **Undo of a `move` leaves any directories it created** (empty `archive/` after
-  moving a file back). Files are byte-identical; empty-dir tracking is a
-  fast-follow nicety.
+**Zero native dependencies** — pure JavaScript on Node 22.13+ (SQLite via
+`node:sqlite`). Install is seconds, no compiler. CI-verified on Linux, macOS,
+and Windows.
 
 ## License
 
-Agent Rewind is **source-available** under the [Business Source License 1.1](LICENSE.md),
-© 2026 [Moholo Inc.](mailto:founders@moholo.co):
+Source-available under the [Business Source License 1.1](LICENSE.md),
+© 2026 Moholo Inc. Free for individuals, nonprofits, education, and
+organizations under 25 people / US $2M revenue — including production. Larger
+organizations need a [commercial license](COMMERCIAL-LICENSE.md)
+(founders@moholo.co). Every version becomes Apache 2.0 open source four years
+after release. See [TERMS.md](TERMS.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
-- **Free forever** for individuals, nonprofits, education, and organizations
-  under 25 people / US $2M revenue — including production use.
-- **Free for everyone** for development, testing, and evaluation.
-- **Commercial license required** for production use above those thresholds —
-  see [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
-- Each version **becomes Apache 2.0 open source four years after release**.
+## Roadmap
 
-See also [TERMS.md](TERMS.md) and the contributor agreement in
-[CONTRIBUTING.md](CONTRIBUTING.md).
+- Real connectors: Gmail, Slack, Stripe (OAuth), with per-field redaction
+- Reversible-shell tier: filesystem snapshots (APFS/btrfs) bracketing agent
+  sessions, so even arbitrary Bash can be rolled back
+- Enterprise: audit export, SSO, retention policies, multi-operator
+- HTTP/SSE MCP transport; held-action persistence across restarts
 
-## Fast-follow (explicit v1 non-goals)
-
-- Real Gmail/Slack/Stripe OAuth connectors (v1 email is a self-contained mock;
-  the manifest/compensator interface is designed for a third connector without
-  touching core).
-- Multi-user auth, accounts, billing, cloud deployment.
-- ROI/attribution analytics and enterprise audit export (later products off the
-  same journal).
-- Distributed/HA storage (v1 is local disk + SQLite via Node's built-in
-  `node:sqlite` — no native modules).
-- HTTP/SSE MCP transport (v1 is stdio + in-memory).
-- Persisting held-action payloads across restarts; empty-directory restoration.
+*Developer docs, architecture details, and the build history live in
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).*
