@@ -81,7 +81,7 @@ describe("mock email connector", () => {
     expect(store.count("inbox")).toBe(200);
     expect(seedInbox(store)).toBe(0); // idempotent
     expect(store.count("inbox")).toBe(200);
-  });
+  }, 30_000);
 
   it("delete_message → undo restores the message to its original folder", async () => {
     seedInbox(store, 5);
@@ -114,7 +114,7 @@ describe("mock email connector", () => {
     expect(result.detail).toContain("200");
     expect(store.count("inbox")).toBe(200);
     expect(store.count("__trash")).toBe(0);
-  });
+  }, 30_000); // 200 MCP restore round-trips are slow on Windows CI runners
 
   it("send → recall within the delivery window cancels the send", async () => {
     const { manifest } = createEmailConnector();

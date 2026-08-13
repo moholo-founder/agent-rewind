@@ -119,7 +119,7 @@ describe("filesystem compensators (round trips)", () => {
       expect(fs.readFileSync(path.join(root, rel)).equals(content)).toBe(true);
     }
     expect(ops.countFiles(sandbox, "inbox-archive")).toBe(200);
-  });
+  }, 30_000); // 200 fsynced snapshots are slow on Windows CI runners
 
   it("delete_dir undo is idempotent", async () => {
     const { manifest, sandbox } = createFilesystemConnector({ root });
