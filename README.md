@@ -42,7 +42,14 @@ Every tool call your agent makes through the proxy is journaled, snapshotted,
 policy-gated, and reversible from the timeline UI at http://localhost:4821.
 
 **Native Claude Code sessions** (built-in Bash/Edit/Write, no MCP involved) —
-hooks mode:
+one plugin install:
+
+```
+/plugin marketplace add moholo-founder/agent-rewind
+/plugin install agent-rewind@agent-rewind
+```
+
+or wire a single project by hand:
 
 ```bash
 agent-rewind hooks install    # wires this project's .claude/settings.json

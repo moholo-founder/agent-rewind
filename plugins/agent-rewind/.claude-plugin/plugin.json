@@ -1,0 +1,11 @@
+{
+  "name": "agent-rewind",
+  "displayName": "Agent Rewind",
+  "version": "0.1.0",
+  "description": "Flight recorder + undo for Claude Code sessions: append-only journal of every Bash/Edit/Write call, pre-action snapshots (incl. Bash file effects) for one-click undo, dangerous-command escalation, and a durable kill switch. Operator console: `npx -y agent-rewind ui` → http://localhost:4821",
+  "author": {
+    "name": "Moholo Inc.",
+    "email": "founders@moholo.co"
+  },
+  "hooks": "./hooks/hooks.json"
+}
