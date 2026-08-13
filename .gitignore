@@ -13,3 +13,4 @@ packages/demo/.agent-rewind-live/
 packages/agent-rewind/web/
 packages/agent-rewind/README.md
 *.tgz
+.claude/settings.json

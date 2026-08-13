@@ -1,0 +1,21 @@
+An AI safety director told her agent: "don't act until I tell you to."
+
+Then she watched it start deleting her entire inbox — and she couldn't stop it from her phone. "I had to RUN to my Mac mini like I was defusing a bomb."
+
+The cause of that OpenClaw incident? Context compaction. The long-running task pushed her instruction out of the agent's memory. The only stop button lived inside the agent's head — and the agent forgot it.
+
+So I built the two things that were missing: a black box and an undo button.
+
+Agent Rewind is a flight recorder for AI agents. It sits between the agent and its tools, records every action, snapshots state before anything destructive runs, and holds oversized operations for human approval.
+
+In the video: a rogue agent wipes a 200-message inbox and deletes 40 quarterly reports. The operator clicks Rewind. Everything comes back.
+
+⏺ Every action journaled — append-only, tamper-resistant
+↩️ One-click undo — byte-identical restore from pre-action snapshots
+🛑 A kill switch that lives OUTSIDE the agent's context — compaction can't erase it, and no amount of "creative reasoning" clears it
+
+Works with any MCP tool stack (Claude Code, Claude Desktop, Cursor). Source-available, free for individuals and small teams, installs in seconds.
+
+What's the scariest thing an AI agent has done in your org?
+
+Demo + code: https://github.com/moholo-founder/agent-rewind

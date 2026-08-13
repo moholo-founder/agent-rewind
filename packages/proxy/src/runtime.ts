@@ -47,6 +47,16 @@ interface RouteEntry {
   capability: ToolCapability | undefined;
 }
 
+/** Recorded file effects of a hook-captured Bash command (see hooks mode). */
+interface CcBashEffect {
+  kind: "cc-bash-effect";
+  root: string;
+  modified: { rel: string; hash: string }[];
+  deleted: { rel: string; hash: string }[];
+  created: string[];
+  skippedNote: string;
+}
+
 export class AgentRewindRuntime {
   readonly journal: Journal;
   readonly snapshots: SnapshotStore;
@@ -524,6 +534,19 @@ export class AgentRewindRuntime {
       present: boolean;
       contentRef?: string;
     }>(action.preStateRef);
+    if (pre.kind === "cc-bash-effect") {
+      return this.undoBashEffect(pre as unknown as CcBashEffect);
+    }
+    if (pre.kind === "cc-bash-tree") {
+      // Pre-command manifest exists but the post-command diff never ran
+      // (crash/denial mid-flight): there is no recorded effect set to
+      // restore, and guessing would risk clobbering later work.
+      return {
+        outcome: "not-reversible",
+        detail:
+          "A pre-command tree snapshot exists but the command's completion was never observed, so its exact file effects are unknown. Not restoring blindly.",
+      };
+    }
     if (pre.kind !== "cc-file") {
       return { outcome: "failed", detail: `Unrecognized pre-state kind "${pre.kind}"` };
     }
@@ -537,6 +560,54 @@ export class AgentRewindRuntime {
     }
     if (fs.existsSync(pre.path)) fs.rmSync(pre.path);
     return { outcome: "undone", detail: `Removed ${pre.path} (did not exist before)` };
+  }
+
+  /** Restore a Bash command's recorded file effects inside the project tree. */
+  private undoBashEffect(effect: CcBashEffect): UndoResult {
+    const root = path.resolve(effect.root);
+    const resolveInRoot = (rel: string): string => {
+      const abs = path.resolve(root, rel);
+      if (abs !== root && !abs.startsWith(root + path.sep)) {
+        throw new Error(`Effect path escapes project root: ${rel}`);
+      }
+      return abs;
+    };
+    let restored = 0, removed = 0;
+    const failures: string[] = [];
+    for (const { rel, hash } of [...effect.modified, ...effect.deleted]) {
+      try {
+        const abs = resolveInRoot(rel);
+        fs.mkdirSync(path.dirname(abs), { recursive: true });
+        fs.writeFileSync(abs, this.snapshots.getBlob(hash));
+        restored++;
+      } catch (err) {
+        failures.push(`${rel}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    for (const rel of effect.created) {
+      try {
+        const abs = resolveInRoot(rel);
+        if (fs.existsSync(abs)) fs.rmSync(abs);
+        removed++;
+      } catch (err) {
+        failures.push(`${rel}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    const scope = effect.skippedNote ? `; out of scope: ${effect.skippedNote}` : "";
+    const total = effect.modified.length + effect.deleted.length + effect.created.length;
+    if (total === 0) {
+      return { outcome: "undone", detail: "Command had no recorded file effects in the project (processes/network are not reversible)" };
+    }
+    if (failures.length === 0) {
+      return {
+        outcome: "undone",
+        detail: `Restored ${restored} files, removed ${removed} created files (file effects only — processes/network are not reversible${scope})`,
+      };
+    }
+    return {
+      outcome: restored + removed > 0 ? "partial" : "failed",
+      detail: `Restored ${restored}/${effect.modified.length + effect.deleted.length}, removed ${removed}/${effect.created.length}; failures: ${failures.slice(0, 3).join("; ")}`,
+    };
   }
 
   /** Undo a single executed action (timeline Undo button). */

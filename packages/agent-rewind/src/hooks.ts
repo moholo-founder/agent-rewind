@@ -70,6 +70,131 @@ interface CcFilePreState {
   contentRef?: string;
 }
 
+// ---- Bash tree snapshots ---------------------------------------------------
+// Arbitrary shell has no inverse, but its FILE effects inside the project
+// tree do: snapshot the tree before the command (content-addressed dedup +
+// an mtime/size cache make repeats cheap), diff after, and undo restores
+// exactly what the command touched. Processes, network, and paths outside
+// the project root remain honestly out of scope.
+
+const TREE_EXCLUDES = new Set([
+  ".git", "node_modules", "dist", "build", "out", "coverage", ".next",
+  ".turbo", ".cache", ".venv", "venv", "__pycache__", "target",
+  ".pnpm-store", ".DS_Store",
+]);
+const MAX_TREE_FILES = 20_000;
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
+
+interface TreeManifest {
+  kind: "cc-bash-tree";
+  root: string;
+  /** rel path → snapshot blob ref (sha256). */
+  files: Record<string, string>;
+  fileCount: number;
+  skippedLarge: number;
+  skippedSymlinks: number;
+}
+
+interface BashEffect {
+  kind: "cc-bash-effect";
+  root: string;
+  modified: { rel: string; hash: string }[];
+  deleted: { rel: string; hash: string }[];
+  created: string[];
+  skippedNote: string;
+}
+
+interface CacheEntry { mtimeMs: number; size: number; hash: string; }
+
+function treeCachePath(home: string, root: string): string {
+  const key = createHash("sha256").update(root).digest("hex").slice(0, 16);
+  return path.join(home, "tree-cache", `${key}.json`);
+}
+
+function shouldExclude(name: string): boolean {
+  return TREE_EXCLUDES.has(name) || name.startsWith(".agent-rewind");
+}
+
+/**
+ * Walk the tree building rel→blobRef. Uses the previous walk's mtime/size
+ * cache so unchanged files are neither re-read nor re-hashed. Returns null
+ * when the tree exceeds the file cap (capture is skipped, journaled as such).
+ */
+function captureTreeManifest(
+  root: string,
+  snapshots: SnapshotStore,
+  home: string,
+): TreeManifest | null {
+  let cache: Record<string, CacheEntry> = {};
+  const cacheFile = treeCachePath(home, root);
+  try { cache = JSON.parse(fs.readFileSync(cacheFile, "utf8")) as Record<string, CacheEntry>; } catch { /* cold */ }
+  const nextCache: Record<string, CacheEntry> = {};
+  const files: Record<string, string> = {};
+  let fileCount = 0, skippedLarge = 0, skippedSymlinks = 0;
+
+  const walk = (dir: string, rel: string): boolean => {
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return true; }
+    for (const e of entries) {
+      if (shouldExclude(e.name)) continue;
+      const abs = path.join(dir, e.name);
+      const r = rel === "" ? e.name : `${rel}/${e.name}`;
+      if (e.isSymbolicLink()) { skippedSymlinks++; continue; }
+      if (e.isDirectory()) { if (!walk(abs, r)) return false; continue; }
+      if (!e.isFile()) continue;
+      let st: fs.Stats;
+      try { st = fs.statSync(abs); } catch { continue; }
+      if (st.size > MAX_FILE_BYTES) { skippedLarge++; continue; }
+      if (++fileCount > MAX_TREE_FILES) return false;
+      const cached = cache[r];
+      if (cached && cached.mtimeMs === st.mtimeMs && cached.size === st.size && snapshots.has(cached.hash)) {
+        files[r] = cached.hash;
+        nextCache[r] = cached;
+      } else {
+        try {
+          const hash = snapshots.putBlob(fs.readFileSync(abs), { origin: "cc-bash-tree" });
+          files[r] = hash;
+          nextCache[r] = { mtimeMs: st.mtimeMs, size: st.size, hash };
+        } catch { /* unreadable file — skip */ }
+      }
+    }
+    return true;
+  };
+
+  if (!walk(root, "")) return null;
+  try {
+    fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+    fs.writeFileSync(cacheFile, JSON.stringify(nextCache));
+  } catch { /* cache is an optimization only */ }
+  return { kind: "cc-bash-tree", root, files, fileCount, skippedLarge, skippedSymlinks };
+}
+
+/** Diff a fresh walk against the pre-command manifest. */
+function diffTree(pre: TreeManifest, post: TreeManifest): BashEffect {
+  const modified: BashEffect["modified"] = [];
+  const deleted: BashEffect["deleted"] = [];
+  const created: string[] = [];
+  for (const [rel, hash] of Object.entries(pre.files)) {
+    const now = post.files[rel];
+    if (now === undefined) deleted.push({ rel, hash });
+    else if (now !== hash) modified.push({ rel, hash });
+  }
+  for (const rel of Object.keys(post.files)) {
+    if (pre.files[rel] === undefined) created.push(rel);
+  }
+  const notes: string[] = [];
+  if (pre.skippedLarge || post.skippedLarge) notes.push(`${Math.max(pre.skippedLarge, post.skippedLarge)} files >5MB not covered`);
+  if (pre.skippedSymlinks) notes.push(`${pre.skippedSymlinks} symlinks not covered`);
+  return {
+    kind: "cc-bash-effect",
+    root: pre.root,
+    modified,
+    deleted,
+    created,
+    skippedNote: notes.join("; "),
+  };
+}
+
 function pendingDir(home: string): string {
   return path.join(home, "hook-pending");
 }
@@ -169,7 +294,7 @@ export function runHook(input: HookInput, opts: { home: string }): HookResult {
     sweepStale(journal, opts.home);
     return event === "PreToolUse"
       ? handlePre(input, journal, snapshots, opts.home)
-      : handlePost(input, journal, opts.home);
+      : handlePost(input, journal, snapshots, opts.home);
   } finally {
     journal.close();
   }
@@ -245,7 +370,20 @@ function handlePre(
     if (hit) {
       toolClass = "destructive";
       riskScore = 0.9;
-      escalate = `Agent Rewind: this command matches a high-risk pattern (${hit}). It is journaled but has NO automatic undo — confirm deliberately.`;
+      escalate = `Agent Rewind: this command matches a high-risk pattern (${hit}). File effects inside the project are snapshotted, but processes/network are NOT undoable — confirm deliberately.`;
+    }
+    // Snapshot the project tree so the command's FILE effects are undoable.
+    if (input.cwd && fs.existsSync(input.cwd)) {
+      try {
+        const manifest = captureTreeManifest(path.resolve(input.cwd), snapshots, home);
+        if (manifest) {
+          preStateRef = snapshots.putRecord(manifest, { connector: "claude-code", tool: "Bash" });
+        }
+      } catch {
+        // Capture is best-effort for Bash: the command still runs, and undo
+        // will honestly report not-reversible for this action.
+        preStateRef = null;
+      }
     }
   }
 
@@ -271,10 +409,15 @@ function handlePre(
   return escalate ? ask(escalate) : { exitCode: 0 };
 }
 
-function handlePost(input: HookInput, journal: Journal, home: string): HookResult {
+function handlePost(
+  input: HookInput,
+  journal: Journal,
+  snapshots: SnapshotStore,
+  home: string,
+): HookResult {
   const tool = input.tool_name!;
   const args = input.tool_input ?? {};
-  const summary = summarize(tool, args);
+  let summary = summarize(tool, args);
   const pendingFile = path.join(pendingDir(home), correlationKey(input));
 
   let actionId: string | null = null;
@@ -289,9 +432,32 @@ function handlePost(input: HookInput, journal: Journal, home: string): HookResul
 
   if (actionId) {
     try {
+      // For Bash with a pre-command tree manifest: rewalk, diff, and swap the
+      // pre-state ref for the concrete effect set (what to restore on undo).
+      let preStateRef: string | undefined;
+      if (tool === "Bash") {
+        const row = journal.get(actionId);
+        if (row.preStateRef) {
+          try {
+            const pre = snapshots.getRecord<TreeManifest>(row.preStateRef);
+            if (pre.kind === "cc-bash-tree" && fs.existsSync(pre.root)) {
+              const post = captureTreeManifest(pre.root, snapshots, home);
+              if (post) {
+                const effect = diffTree(pre, post);
+                preStateRef = snapshots.putRecord(effect, { connector: "claude-code", tool: "Bash" });
+                const touched = effect.modified.length + effect.created.length + effect.deleted.length;
+                summary = touched
+                  ? `${summary} — touched ${touched} files (${effect.modified.length} modified, ${effect.created.length} created, ${effect.deleted.length} deleted)`
+                  : `${summary} — no file changes in project`;
+              }
+            }
+          } catch { /* diff is best-effort; original manifest stays attached */ }
+        }
+      }
       journal.transition(actionId, "executed", {
         executedTs: new Date().toISOString(),
         resultSummary: summary,
+        ...(preStateRef ? { preStateRef } : {}),
       });
       return { exitCode: 0 };
     } catch {
