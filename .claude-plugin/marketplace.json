@@ -10,7 +10,7 @@
       "name": "agent-rewind",
       "source": "./plugins/agent-rewind",
       "description": "Flight recorder for Claude Code: journals every Bash/Edit/Write call, snapshots files (and Bash file effects) before they land for one-click undo, escalates dangerous commands, and adds a kill switch the agent cannot clear.",
-      "version": "0.1.0"
+      "version": "0.2.0"
     }
   ]
 }

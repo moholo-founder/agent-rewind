@@ -1,6 +1,6 @@
 {
   "name": "agent-rewind",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Flight recorder + undo button for AI agents. MCP interception proxy: journals every tool call, snapshots state before destructive actions, holds oversized ones for approval, and gives operators per-action Undo, Rewind-to-T, and a kill switch.",
   "keywords": [
     "mcp",
