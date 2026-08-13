@@ -36,11 +36,16 @@ held; reports never round up; capture-before-execute or refuse.
 
 ## Engineering backlog (priority order)
 
-1. **Real outbound connectors** (AGREED with founder): email via SMTP + X
-   via official API, `holdThreshold: 0` → every send/post HELD in tray;
-   delete-tweet as compensator; sent email honestly not-reversible.
-   Credentials via env only (founder supplies; redactor keeps them out of
-   journal). This powers the approval-gated marketing pipeline.
+1. ~~**Real outbound connectors**~~ DONE (2026-08-13, unreleased): `smtp`
+   connector (nodemailer, pure JS) + `x` connector (API v2, hand-rolled
+   OAuth 1.0a signer verified against X's doc vector). Both default
+   `holdThreshold: 0` → every send/post HELD; delete-tweet compensator via
+   persisted JSONL post log (survives restarts); sent email honestly
+   not-reversible with full draft archived as snapshot. Creds env-only,
+   passed explicitly to child servers (`AGENT_REWIND_SMTP_*`,
+   `AGENT_REWIND_X_*`), never in tool args → never in journal. Needs:
+   version bump + npm publish (founder passkey), then live-fire test with
+   real creds before the marketing pipeline uses it.
 2. **Gate verdict on every journal row** (from reviewer signal): record WHY
    each action passed/held ("blast radius 3 ≤ 25, snapshot captured") and
    show in row detail. ~1h. Feeds #3.

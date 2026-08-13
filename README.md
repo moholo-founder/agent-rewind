@@ -109,6 +109,24 @@ delayed outbox with a recall window — after delivery, undo honestly reports
 `not-reversible`). The interface is designed so real connectors (Gmail,
 Slack, Stripe) drop in without touching core.
 
+### Real outbound connectors (opt-in)
+
+Two connectors talk to the real world, and both default to **hold
+everything**: with `holdThreshold: 0`, no email is sent and no post goes
+public until an operator clicks Approve in the tray.
+
+- **SMTP email** — set `AGENT_REWIND_SMTP_HOST` / `PORT` / `USER` / `PASS` /
+  `FROM` (`SECURE` optional; inferred from port). A delivered email has no
+  undo, and Agent Rewind says so: the compensator archives the exact draft
+  as a snapshot and reports `not-reversible` honestly.
+- **X (Twitter)** — set `AGENT_REWIND_X_API_KEY` / `API_SECRET` /
+  `ACCESS_TOKEN` / `ACCESS_SECRET` (OAuth 1.0a user context, official API
+  v2). Posts *are* reversible: undo deletes the tweet, resolved through a
+  persisted post log that survives restarts.
+
+Credentials live only in the connector server's environment — they never
+appear in tool arguments, so they can never reach the journal.
+
 **Zero native dependencies** — pure JavaScript on Node 22.13+ (SQLite via
 `node:sqlite`). Install is seconds, no compiler. CI-verified on Linux, macOS,
 and Windows.
