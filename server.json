@@ -1,0 +1,32 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.moholo-founder/agent-rewind",
+  "description": "Flight recorder + undo for AI agents: journals every tool call, snapshots state before destructive actions, holds oversized ones for approval, with per-action Undo, Rewind, and a durable kill switch.",
+  "repository": {
+    "url": "https://github.com/moholo-founder/agent-rewind",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registry_type": "npm",
+      "identifier": "agent-rewind",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environment_variables": [
+        {
+          "name": "AGENT_REWIND_PORT",
+          "description": "Timeline UI port (default 4821)",
+          "is_required": false
+        },
+        {
+          "name": "AGENT_REWIND_SANDBOX",
+          "description": "Filesystem sandbox root (default: seeded demo workspace in ~/.agent-rewind/sandbox)",
+          "is_required": false
+        }
+      ]
+    }
+  ]
+}
