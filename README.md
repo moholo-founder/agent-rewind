@@ -142,7 +142,9 @@ after release. See [TERMS.md](TERMS.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Roadmap
 
-- Real connectors: Gmail, Slack, Stripe (OAuth), with per-field redaction
+- More real connectors: Gmail, Slack, Stripe (OAuth), with per-field redaction
+- Gate verdict + reasoning recorded on every journal row, not just held ones
+- OpenTelemetry exporter — one span per tool call
 - Enterprise: audit export, SSO, retention policies, multi-operator
 - HTTP/SSE MCP transport; held-action persistence across restarts
 

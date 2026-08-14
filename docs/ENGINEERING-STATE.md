@@ -5,12 +5,14 @@ in a separate workspace (`~/Desktop/Agent Rewind Promo`) — do not mix.
 
 ## Where things stand
 
-- **Published**: `agent-rewind@0.1.0` on npm (account `moholo`, 2FA passkey).
-  `npx -y agent-rewind` verified cold: 2s start, 12 tools, intercept+journal+
-  snapshot working. `mcpName: io.github.moholo-founder/agent-rewind` is set.
-- **Repo**: public, github.com/moholo-founder/agent-rewind. CI green
-  (ubuntu/macos/windows × Node 22/24). 91 tests… precisely: core 22,
-  connectors 23, proxy 14, api 12, agent-rewind 14, web 1, demo 1 = 87.
+- **Published**: `agent-rewind@0.2.0` on npm (account `moholo`, 2FA passkey) —
+  bumped from 0.1.0 to ship the SMTP + X connectors below. `npx -y
+  agent-rewind` verified cold on 0.1.0 (2s start, 12 tools, intercept+
+  journal+snapshot working); re-verify cold-start on 0.2.0 before relying on
+  it in launch copy. `mcpName: io.github.moholo-founder/agent-rewind` set.
+- **Repo**: public, github.com/moholo-founder/agent-rewind. CI green at
+  026fc0e (ubuntu/macos/windows × Node 22/24). 108 tests: core 22,
+  connectors 39, proxy 19, api 12, agent-rewind 14, web 1, demo 1.
 - **License**: BUSL-1.1 (Moholo Inc.), commercial tier, terms, CLA in root.
   TERMS.md promises ZERO telemetry — hard product constraint, never violate.
 - **Engine floor**: Node 22.13 (unflagged node:sqlite). No native deps.
@@ -36,16 +38,17 @@ held; reports never round up; capture-before-execute or refuse.
 
 ## Engineering backlog (priority order)
 
-1. ~~**Real outbound connectors**~~ DONE (2026-08-13, unreleased): `smtp`
+1. ~~**Real outbound connectors**~~ SHIPPED in 0.2.0 (published on npm): `smtp`
    connector (nodemailer, pure JS) + `x` connector (API v2, hand-rolled
    OAuth 1.0a signer verified against X's doc vector). Both default
    `holdThreshold: 0` → every send/post HELD; delete-tweet compensator via
    persisted JSONL post log (survives restarts); sent email honestly
    not-reversible with full draft archived as snapshot. Creds env-only,
    passed explicitly to child servers (`AGENT_REWIND_SMTP_*`,
-   `AGENT_REWIND_X_*`), never in tool args → never in journal. Needs:
-   version bump + npm publish (founder passkey), then live-fire test with
-   real creds before the marketing pipeline uses it.
+   `AGENT_REWIND_X_*`), never in tool args → never in journal. STILL
+   OUTSTANDING: no live-fire test with real SMTP/X credentials has been run
+   yet — do that before the marketing pipeline depends on it. README
+   documents both under "Real outbound connectors (opt-in)".
 2. **Gate verdict on every journal row** (from reviewer signal): record WHY
    each action passed/held ("blast radius 3 ≤ 25, snapshot captured") and
    show in row detail. ~1h. Feeds #3.

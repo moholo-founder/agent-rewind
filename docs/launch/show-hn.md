@@ -31,15 +31,22 @@ Code hooks for native Bash/Edit/Write) and:
 - has a kill switch that lives OUTSIDE the agent's context, so compaction
   and "creative reasoning" can't clear it
 
+Since the first version of this I also shipped two connectors that talk to
+the real world — SMTP email and X (Twitter) — both defaulting to
+`holdThreshold: 0`, meaning literally nothing goes out (no email sent, no
+post published) until a human clicks Approve. Posts to X are actually
+reversible (undo deletes the tweet via a persisted post log); a delivered
+email is not, and it says so.
+
 What it deliberately does NOT do: pretend everything is reversible. Bash
 undo covers file effects inside the project tree (snapshotted+diffed per
 command); processes, network calls, and a delivered email are honestly
 reported as not-reversible. The per-action rewind report never claims more
 than it restored.
 
-Zero native deps (node:sqlite), 87 tests incl. byte-identical round-trips
+Zero native deps (node:sqlite), 108 tests incl. byte-identical round-trips
 for every undo path, BUSL-licensed (free for individuals/small teams,
-Apache-2.0 after 4 years).
+Apache-2.0 after 4 years). v0.2.0 on npm today.
 
 The 60-second demo: `pnpm demo` boots a scripted rogue agent that wipes a
 200-message inbox; you press Rewind and watch it all come back.
@@ -75,3 +82,9 @@ after the first pass.
 when you remember to commit; it doesn't cover the email your agent sent, the
 inbox it wiped, or the approval gate BEFORE a bulk delete. The journal +
 holds + kill switch are the point; file restore is table stakes.
+
+**"What happens when the agent tries to actually email someone or post to
+Twitter?"** Both are real connectors (SMTP, X API v2), both hold-by-default
+at threshold 0 — nothing sends or posts without a human clicking Approve.
+X posts are undoable (delete via a persisted post log); a delivered email
+genuinely isn't, and the tool says so instead of pretending.
